@@ -1,0 +1,15 @@
+{
+  "name": "wasilah-wa-bot",
+  "version": "1.0.0",
+  "description": "Self-hosted WhatsApp automation - zero SaaS subscription. Meta Cloud API + n8n style flow in plain Node.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tunnel": "npx cloudflared tunnel --url http://localhost:3000"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5"
+  }
+}

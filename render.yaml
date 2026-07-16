@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: wasilah-wa
+    runtime: docker
+    plan: free
+    branch: main
+    healthCheckPath: /admin
+    envVars:
+      - key: VERIFY_TOKEN
+        generateValue: true
+      - key: PORT
+        value: 3000
+      - key: WA_API_VERSION
+        value: v19.0
