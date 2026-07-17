@@ -1,48 +1,61 @@
 // طبقة قاعدة البيانات باستخدام Supabase (بديل عن SQLite)
 // تقرأ المتغيرات من البيئة: SUPABASE_URL + SUPABASE_KEY
-const { createClient } = require('@supabase/supabase-js');
+// آمن: لو Supabase فشل/معطل → يرجع تلقائياً للتخزين المحلي (fallback)
+const { createClient } = require('supabase');
 
 const sbUrl = process.env.SUPABASE_URL;
 const sbKey = process.env.SUPABASE_KEY;
 
 let sb = null;
-if (sbUrl && sbKey) {
-  sb = createClient(sbUrl, sbKey);
+if (sbUrl && sbKey && sbKey.startsWith('sb_') && sbKey.length > 20) {
+  try {
+    sb = createClient(sbUrl, sbKey, { auth: { persistSession: false } });
+  } catch (e) {
+    console.log('[SUPABASE] فشل إنشاء العميل — استخدام محلي:', e.message);
+    sb = null;
+  }
 }
 
 const USING_SUPABASE = !!sb;
 
 async function ensureSchema() {
   if (!USING_SUPABASE) return;
-  // Supabase لا ينشئ الجداول تلقائياً من الكود — نتأكد فقط من الاتصال
   try {
-    await sb.from('clients').select('id').limit(1);
+    const { error } = await sb.from('clients').select('id').limit(1);
+    if (error) console.log('[SUPABASE] تحذير: تأكد من تشغيل schema.sql. الخطأ:', error.message);
+    else console.log('[SUPABASE] الاتصال ناجح ✅');
   } catch (e) {
-    console.log('[SUPABASE] تحذير: جدول clients غير موجود. شغّل ملف schema.sql بـ Supabase SQL Editor.');
+    console.log('[SUPABASE] خطأ اتصال — سيُستخدم التخزين المحلي:', e.message);
   }
 }
 
 // ---------- clients ----------
 async function getClientByPhone(phoneId) {
   if (USING_SUPABASE) {
-    const { data } = await sb.from('clients').select('*').eq('phone_id', phoneId).single();
-    return data;
+    try {
+      const { data } = await sb.from('clients').select('*').eq('phone_id', phoneId).single();
+      return data;
+    } catch (e) { console.log('[SUPABASE] getClientByPhone فشل، محلي:', e.message); }
   }
   return localFallback.getClientByPhone(phoneId);
 }
 
 async function upsertClient({ id, name, phoneId, waToken, flow }) {
   if (USING_SUPABASE) {
-    await sb.from('clients').upsert({ id, name, phone_id: phoneId, wa_token: waToken, flow });
-    return;
+    try {
+      await sb.from('clients').upsert({ id, name, phone_id: phoneId, wa_token: waToken, flow });
+      return;
+    } catch (e) { console.log('[SUPABASE] upsertClient فشل، محلي:', e.message); }
   }
   localFallback.upsertClient({ id, name, phoneId, waToken, flow });
 }
 
 async function listClients() {
   if (USING_SUPABASE) {
-    const { data } = await sb.from('clients').select('*');
-    return data || [];
+    try {
+      const { data } = await sb.from('clients').select('*');
+      return data || [];
+    } catch (e) { console.log('[SUPABASE] listClients فشل، محلي:', e.message); }
   }
   return localFallback.listClients();
 }
@@ -50,16 +63,20 @@ async function listClients() {
 // ---------- qa ----------
 async function getQA(clientId) {
   if (USING_SUPABASE) {
-    const { data } = await sb.from('qa').select('*').eq('client_id', clientId);
-    return data || [];
+    try {
+      const { data } = await sb.from('qa').select('*').eq('client_id', clientId);
+      return data || [];
+    } catch (e) { console.log('[SUPABASE] getQA فشل، محلي:', e.message); }
   }
   return localFallback.getQA(clientId);
 }
 
 async function insertQA({ clientId, question, keywords, reply }) {
   if (USING_SUPABASE) {
-    await sb.from('qa').insert({ client_id: clientId, question, keywords, reply });
-    return;
+    try {
+      await sb.from('qa').insert({ client_id: clientId, question, keywords, reply });
+      return;
+    } catch (e) { console.log('[SUPABASE] insertQA فشل، محلي:', e.message); }
   }
   localFallback.insertQA({ clientId, question, keywords, reply });
 }
@@ -68,21 +85,25 @@ async function insertQA({ clientId, question, keywords, reply }) {
 async function logMsg(clientId, from, dir, text) {
   const row = { client_id: clientId, from_num: from, direction: dir, text, at: new Date().toISOString() };
   if (USING_SUPABASE) {
-    await sb.from('messages').insert(row);
-    return;
+    try {
+      await sb.from('messages').insert(row);
+      return;
+    } catch (e) { /* صامت — نروح للفولباك */ }
   }
   localFallback.logMsg(row);
 }
 
 async function listMessages(limit = 50) {
   if (USING_SUPABASE) {
-    const { data } = await sb.from('messages').select('*').order('id', { ascending: false }).limit(limit);
-    return data || [];
+    try {
+      const { data } = await sb.from('messages').select('*').order('id', { ascending: false }).limit(limit);
+      return data || [];
+    } catch (e) { console.log('[SUPABASE] listMessages فشل، محلي:', e.message); }
   }
   return localFallback.listMessages(limit);
 }
 
-// ---------- fallback محلي (لو ما فيه Supabase) ----------
+// ---------- fallback محلي (لو ما فيه Supabase أو فشل) ----------
 const localFallback = (() => {
   const Database = require('better-sqlite3');
   const fs = require('fs');
