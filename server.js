@@ -22,6 +22,8 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(path.join(DATA_DIR, 'wasilah.db'));
 db.pragma('journal_mode = WAL');
+db.pragma('encoding = "UTF-8"');
+app.use((req, res, next) => { res.set('Content-Type', 'text/html; charset=utf-8'); next(); });
 
 // ---------- جداول قاعدة البيانات ----------
 db.prepare(`CREATE TABLE IF NOT EXISTS clients (
