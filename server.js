@@ -159,6 +159,9 @@ function checkAuth(req, res, next) {
   return res.status(401).send('🔒 مصرح فقط');
 }
 
+// ---------- مسار فحص الصحة (مفتوح لـ Render) ----------
+app.get('/health', (req, res) => res.status(200).send('OK'));
+
 // ---------- لوحة الإدارة ----------
 app.get('/admin', checkAuth, (req, res) => res.send(adminHtml()));
 
