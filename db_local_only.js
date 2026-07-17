@@ -1,5 +1,4 @@
-// تخزين محلي فقط (بدون Supabase) — للاستخدام السريع/المؤقت
-// يستخدم better-sqlite3 على قرص السيرفر
+// تخزين محلي فقط (بدون Supabase) — كل الدوال ترجع Promise (آمن مع await)
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
@@ -14,20 +13,24 @@ db.prepare(`CREATE TABLE IF NOT EXISTS qa (id INTEGER PRIMARY KEY AUTOINCREMENT,
 db.prepare(`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, from_num TEXT, direction TEXT, text TEXT, at TEXT)`).run();
 
 const USING_SUPABASE = false;
+const P = (v) => Promise.resolve(v);
 
-async function ensureSchema() {}
-async function getClientByPhone(p) { return db.prepare('SELECT * FROM clients WHERE phone_id = ?').get(p); }
-async function upsertClient({ id, name, phoneId, waToken, flow }) {
+function ensureSchema() { return P(); }
+function getClientByPhone(p) { return P(db.prepare('SELECT * FROM clients WHERE phone_id = ?').get(p)); }
+function upsertClient({ id, name, phoneId, waToken, flow }) {
   db.prepare('INSERT INTO clients (id,name,phone_id,wa_token,flow) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=?,phone_id=?,wa_token=?,flow=?').run(id, name, phoneId, waToken, flow, name, phoneId, waToken, flow);
+  return P();
 }
-async function listClients() { return db.prepare('SELECT * FROM clients').all(); }
-async function getQA(c) { return db.prepare('SELECT * FROM qa WHERE client_id = ?').all(c); }
-async function insertQA({ clientId, question, keywords, reply }) {
+function listClients() { return P(db.prepare('SELECT * FROM clients').all()); }
+function getQA(c) { return P(db.prepare('SELECT * FROM qa WHERE client_id = ?').all(c)); }
+function insertQA({ clientId, question, keywords, reply }) {
   db.prepare('INSERT INTO qa (client_id,question,keywords,reply) VALUES (?,?,?,?)').run(clientId, question, keywords, reply);
+  return P();
 }
-async function logMsg(r) {
+function logMsg(r) {
   db.prepare('INSERT INTO messages (client_id,from_num,direction,text,at) VALUES (?,?,?,?,?)').run(r.client_id, r.from_num, r.direction, r.text, r.at);
+  return P();
 }
-async function listMessages(l) { return db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l); }
+function listMessages(l) { return P(db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l)); }
 
 module.exports = { USING_SUPABASE, ensureSchema, getClientByPhone, upsertClient, listClients, getQA, insertQA, logMsg, listMessages };

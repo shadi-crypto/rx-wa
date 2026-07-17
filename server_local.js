@@ -128,7 +128,7 @@ function checkAuth(req, res, next) {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 // ---------- لوحة الإدارة ----------
-app.get('/admin', checkAuth, (req, res) => adminHtml());
+app.get('/admin', checkAuth, async (req, res) => res.send(await adminHtml()));
 
 app.post('/admin/client', checkAuth, async (req, res) => {
   const { id, name, phoneId, waToken, flow } = req.body;
