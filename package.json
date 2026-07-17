@@ -1,10 +1,10 @@
 {
   "name": "rx-wa",
-  "version": "3.1.0",
-  "description": "RX WA — منصة أتمتة واتساب multi-tenant بدون LLM. تخزين محلي سريع (بدون Supabase مؤقتاً). Meta Cloud API الرسمي.",
-  "main": "server_local.js",
+  "version": "4.0.0",
+  "description": "RX WA — منصة أتمتة واتساب multi-tenant بدون LLM. Supabase (دائم) + fallback محلي. Meta Cloud API الرسمي.",
+  "main": "server.js",
   "scripts": {
-    "start": "node server_local.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
