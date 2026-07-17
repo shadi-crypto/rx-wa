@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wasilah-wa
+    name: rx-wa
     runtime: docker
     plan: free
     branch: main

@@ -13,7 +13,8 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'wasilah_verify_123';
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'RxWa@2026!SecureVerify';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'RxWa@2026!Admin';
 const API_VERSION = process.env.WA_API_VERSION || 'v19.0';
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -116,10 +117,18 @@ async function genericFlow(client, from, text) {
   return sendText(client, from, '🤖 اكتب "قائمة" للخيارات.');
 }
 
-// ================= لوحة الإدارة =================
-app.get('/admin', (req, res) => res.send(adminHtml()));
+// ---------- حماية اللوحة بباسورد ----------
+function checkAuth(req, res, next) {
+  const auth = req.headers['authorization'] || '';
+  const expected = 'Basic ' + Buffer.from('admin:' + ADMIN_PASSWORD).toString('base64');
+  if (auth === expected) return next();
+  res.set('WWW-Authenticate', 'Basic realm="Wasilah Admin"');
+  return res.status(401).send('🔒 مصرح فقط');
+}
 
-app.post('/admin/client', (req, res) => {
+// ---------- لوحة الإدارة ----------
+app.get('/admin', checkAuth, (req, res) => res.send(adminHtml()));
+app.post('/admin/client', checkAuth, (req, res) => {
   const { id, name, phoneId, waToken, flow } = req.body;
   if (!id || !phoneId || !waToken) return res.status(400).send('missing fields');
   CLIENTS[id] = { id, name, phoneId, waToken, flow: flow || 'generic' };
