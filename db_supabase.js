@@ -1,7 +1,7 @@
 // طبقة قاعدة البيانات باستخدام Supabase (بديل عن SQLite)
 // تقرأ المتغيرات من البيئة: SUPABASE_URL + SUPABASE_KEY
 // آمن: لو Supabase فشل/معطل → يرجع تلقائياً للتخزين المحلي (fallback)
-const { createClient } = require('supabase');
+const { createClient } = require('@supabase/supabase-js');
 
 const sbUrl = process.env.SUPABASE_URL;
 const sbKey = process.env.SUPABASE_KEY;
