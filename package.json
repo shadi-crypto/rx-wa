@@ -1,16 +1,17 @@
 {
   "name": "rx-wa",
-  "version": "2.0.0",
-  "description": "RX WA — منصة أتمتة واتساب متعددة العملاء (multi-tenant) بدون LLM. قاعدة بيانات Q&A ذكية + تشابه دلالي. Meta Cloud API الرسمي (صفر خطر حظر).",
+  "version": "3.0.0",
+  "description": "RX WA — منصة أتمتة واتساب متعددة العملاء (multi-tenant) بدون LLM. قاعدة بيانات Q&A ذكية + Supabase دائم. Meta Cloud API الرسمي (صفر خطر حظر).",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "axios": "^1.18.1",
-    "better-sqlite3": "^11.10.0",
-    "dotenv": "^16.6.1",
-    "express": "^4.22.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.7.2",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "fuse.js": "^7.5.0"
   }
 }
