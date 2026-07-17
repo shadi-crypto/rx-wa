@@ -1,15 +1,16 @@
 {
-  "name": "wasilah-wa-bot",
-  "version": "1.0.0",
-  "description": "Self-hosted WhatsApp automation - zero SaaS subscription. Meta Cloud API + n8n style flow in plain Node.",
+  "name": "rx-wa",
+  "version": "2.0.0",
+  "description": "RX WA — منصة أتمتة واتساب متعددة العملاء (multi-tenant) بدون LLM. قاعدة بيانات Q&A ذكية + تشابه دلالي. Meta Cloud API الرسمي (صفر خطر حظر).",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "tunnel": "npx cloudflared tunnel --url http://localhost:3000"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "axios": "^1.7.2",
-    "dotenv": "^16.4.5"
+    "axios": "^1.18.1",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "fuse.js": "^7.5.0"
   }
 }
