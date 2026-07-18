@@ -1,7 +1,9 @@
-// طبقة قاعدة البيانات باستخدام Supabase (بديل عن SQLite)
-// تقرأ المتغيرات من البيئة: SUPABASE_URL + SUPABASE_KEY
-// آمن: لو Supabase فشل/معطل → يرجع تلقائياً للتخزين المحلي (fallback)
+// طبقة قاعدة البيانات باستخدام Supabase (دائم، يصمد مع cold start على Render المجاني)
+// يقرأ المتغيرات من البيئة: SUPABASE_URL + SUPABASE_KEY
+// لو Supabase فشل/معطل → يرجع تلقائياً للتخزين المحلي (JSON fallback)
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const sbUrl = process.env.SUPABASE_URL;
 const sbKey = process.env.SUPABASE_KEY;
@@ -15,120 +17,123 @@ if (sbUrl && sbKey && sbKey.startsWith('sb_') && sbKey.length > 20) {
     sb = null;
   }
 }
-
 const USING_SUPABASE = !!sb;
 
+// ---------- fallback محلي (JSON على /tmp) ----------
+const DB_FILE = '/tmp/store.json';
+function load() {
+  try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
+  catch (e) { return { clients: [], qa: [], messages: [], flows: {}, misses: {} }; }
+}
+function save(d) { try { fs.writeFileSync(DB_FILE, JSON.stringify(d, null, 2)); } catch (e) {} }
+const D = () => load();
+
 async function ensureSchema() {
-  if (!USING_SUPABASE) return;
+  if (!USING_SUPABASE) { console.log('[DB] وضع محلي (بدون Supabase)'); return; }
   try {
     const { error } = await sb.from('clients').select('id').limit(1);
-    if (error) console.log('[SUPABASE] تحذير: تأكد من تشغيل schema.sql. الخطأ:', error.message);
+    if (error) console.log('[SUPABASE] تحذير: شغّل schema.sql. الخطأ:', error.message);
     else console.log('[SUPABASE] الاتصال ناجح ✅');
   } catch (e) {
-    console.log('[SUPABASE] خطأ اتصال — سيُستخدم التخزين المحلي:', e.message);
+    console.log('[SUPABASE] خطأ اتصال — محلي:', e.message);
   }
 }
 
 // ---------- clients ----------
 async function getClientByPhone(phoneId) {
   if (USING_SUPABASE) {
-    try {
-      const { data } = await sb.from('clients').select('*').eq('phone_id', phoneId).single();
-      return data;
-    } catch (e) { console.log('[SUPABASE] getClientByPhone فشل، محلي:', e.message); }
+    try { const { data } = await sb.from('clients').select('*').eq('phone_id', phoneId).single(); if (data) return data; } catch (e) {}
   }
-  return localFallback.getClientByPhone(phoneId);
+  return D().clients.find(c => c.phone_id === phoneId) || null;
 }
-
 async function upsertClient({ id, name, phoneId, waToken, flow }) {
   if (USING_SUPABASE) {
-    try {
-      await sb.from('clients').upsert({ id, name, phone_id: phoneId, wa_token: waToken, flow });
-      return;
-    } catch (e) { console.log('[SUPABASE] upsertClient فشل، محلي:', e.message); }
+    try { await sb.from('clients').upsert({ id, name, phone_id: phoneId, wa_token: waToken, flow }); return; } catch (e) {}
   }
-  localFallback.upsertClient({ id, name, phoneId, waToken, flow });
+  const d = D(); const i = d.clients.findIndex(c => c.id === id);
+  const rec = { id, name, phone_id: phoneId, wa_token: waToken, flow };
+  if (i >= 0) d.clients[i] = rec; else d.clients.push(rec); save(d);
 }
-
 async function listClients() {
   if (USING_SUPABASE) {
-    try {
-      const { data } = await sb.from('clients').select('*');
-      return data || [];
-    } catch (e) { console.log('[SUPABASE] listClients فشل، محلي:', e.message); }
+    try { const { data } = await sb.from('clients').select('*'); if (data) return data; } catch (e) {}
   }
-  return localFallback.listClients();
+  return D().clients;
 }
 
 // ---------- qa ----------
 async function getQA(clientId) {
   if (USING_SUPABASE) {
-    try {
-      const { data } = await sb.from('qa').select('*').eq('client_id', clientId);
-      return data || [];
-    } catch (e) { console.log('[SUPABASE] getQA فشل، محلي:', e.message); }
+    try { const { data } = await sb.from('qa').select('*').eq('client_id', clientId); if (data) return data; } catch (e) {}
   }
-  return localFallback.getQA(clientId);
+  return D().qa.filter(q => q.client_id === clientId);
 }
-
 async function insertQA({ clientId, question, keywords, reply }) {
   if (USING_SUPABASE) {
-    try {
-      await sb.from('qa').insert({ client_id: clientId, question, keywords, reply });
-      return;
-    } catch (e) { console.log('[SUPABASE] insertQA فشل، محلي:', e.message); }
+    try { await sb.from('qa').insert({ client_id: clientId, question, keywords, reply }); return; } catch (e) {}
   }
-  localFallback.insertQA({ clientId, question, keywords, reply });
+  const d = D(); d.qa.push({ client_id: clientId, question, keywords, reply }); save(d);
 }
 
 // ---------- messages ----------
 async function logMsg(clientId, from, dir, text) {
   const row = { client_id: clientId, from_num: from, direction: dir, text, at: new Date().toISOString() };
   if (USING_SUPABASE) {
-    try {
-      await sb.from('messages').insert(row);
-      return;
-    } catch (e) { /* صامت — نروح للفولباك */ }
+    try { await sb.from('messages').insert(row); return; } catch (e) {}
   }
-  localFallback.logMsg(row);
+  const d = D(); d.messages.push(row); if (d.messages.length > 200) d.messages = d.messages.slice(-200); save(d);
 }
-
 async function listMessages(limit = 50) {
   if (USING_SUPABASE) {
-    try {
-      const { data } = await sb.from('messages').select('*').order('id', { ascending: false }).limit(limit);
-      return data || [];
-    } catch (e) { console.log('[SUPABASE] listMessages فشل، محلي:', e.message); }
+    try { const { data } = await sb.from('messages').select('*').order('id', { ascending: false }).limit(limit); if (data) return data; } catch (e) {}
   }
-  return localFallback.listMessages(limit);
+  return D().messages.slice(-limit).reverse();
 }
 
-// ---------- fallback محلي (لو ما فيه Supabase أو فشل) ----------
-const localFallback = (() => {
-  const Database = require('better-sqlite3');
-  const fs = require('fs');
-  const path = require('path');
-  const DATA_DIR = path.join(__dirname, 'data');
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const db = new Database(path.join(DATA_DIR, 'wasilah.db'));
-  db.pragma('journal_mode = WAL');
-  db.pragma('encoding = "UTF-8"');
-  db.prepare(`CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT, phone_id TEXT UNIQUE, wa_token TEXT, flow TEXT)`).run();
-  db.prepare(`CREATE TABLE IF NOT EXISTS qa (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, question TEXT, keywords TEXT, reply TEXT)`).run();
-  db.prepare(`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, from_num TEXT, direction TEXT, text TEXT, at TEXT)`).run();
-  return {
-    getClientByPhone: (p) => db.prepare('SELECT * FROM clients WHERE phone_id = ?').get(p),
-    upsertClient: ({ id, name, phoneId, waToken, flow }) => db.prepare('INSERT INTO clients (id,name,phone_id,wa_token,flow) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=?,phone_id=?,wa_token=?,flow=?').run(id, name, phoneId, waToken, flow, name, phoneId, waToken, flow),
-    listClients: () => db.prepare('SELECT * FROM clients').all(),
-    getQA: (c) => db.prepare('SELECT * FROM qa WHERE client_id = ?').all(c),
-    insertQA: ({ clientId, question, keywords, reply }) => db.prepare('INSERT INTO qa (client_id,question,keywords,reply) VALUES (?,?,?,?)').run(clientId, question, keywords, reply),
-    logMsg: (r) => db.prepare('INSERT INTO messages (client_id,from_num,direction,text,at) VALUES (?,?,?,?,?)').run(r.client_id, r.from_num, r.direction, r.text, r.at),
-    listMessages: (l) => db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l),
-  };
-})();
+// ---------- flows (تدفق متعدد الخطوات) ----------
+async function getFlow(num) {
+  if (USING_SUPABASE) {
+    try { const { data } = await sb.from('flows').select('*').eq('num', num).single(); if (data) return { step: data.step, order: data.ord }; } catch (e) {}
+  }
+  const f = D().flows[num]; return f ? { step: f.step, order: f.order } : null;
+}
+async function setFlow(num, step, ord) {
+  if (USING_SUPABASE) {
+    try { await sb.from('flows').upsert({ num, step, ord: ord || null }); return; } catch (e) {}
+  }
+  const d = D(); d.flows[num] = { step, order: ord }; save(d);
+}
+async function clearFlow(num) {
+  if (USING_SUPABASE) {
+    try { await sb.from('flows').delete().eq('num', num); return; } catch (e) {}
+  }
+  const d = D(); delete d.flows[num]; save(d);
+}
+
+// ---------- misses (عداد الفشل) ----------
+async function getMiss(num) {
+  if (USING_SUPABASE) {
+    try { const { data } = await sb.from('misses').select('*').eq('num', num).single(); if (data) return data.count; } catch (e) {}
+  }
+  return D().misses[num] || 0;
+}
+async function setMiss(num, c) {
+  if (USING_SUPABASE) {
+    try { await sb.from('misses').upsert({ num, count: c }); return; } catch (e) {}
+  }
+  const d = D(); d.misses[num] = c; save(d);
+}
+async function clearMiss(num) {
+  if (USING_SUPABASE) {
+    try { await sb.from('misses').delete().eq('num', num); return; } catch (e) {}
+  }
+  const d = D(); delete d.misses[num]; save(d);
+}
 
 module.exports = {
   USING_SUPABASE, ensureSchema,
   getClientByPhone, upsertClient, listClients,
   getQA, insertQA, logMsg, listMessages,
+  getFlow, setFlow, clearFlow,
+  getMiss, setMiss, clearMiss,
 };

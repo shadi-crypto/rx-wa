@@ -29,3 +29,18 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_qa_client ON qa(client_id);
 CREATE INDEX IF NOT EXISTS idx_msg_client ON messages(client_id);
 CREATE INDEX IF NOT EXISTS idx_msg_id ON messages(id DESC);
+
+-- تدفق المحادثة (رقم الطلب ← صورة ← تأكيد) — دائم، يصمد مع cold start
+CREATE TABLE IF NOT EXISTS flows (
+  num TEXT PRIMARY KEY,
+  step TEXT NOT NULL,
+  ord TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- عداد الأسئلة غير المفهومة (fallback لموظف بعد 3)
+CREATE TABLE IF NOT EXISTS misses (
+  num TEXT PRIMARY KEY,
+  count INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
