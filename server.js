@@ -130,6 +130,11 @@ async function handleMessage(client, from, text, hasImage) {
   // ===== تدفق التلف/الكسر =====
   if (flowState[from] && flowState[from].step) {
     const st = flowState[from];
+    // خروج من التدفق
+    if (lower.includes('إلغاء') || lower.includes('موظف') || lower.includes('اتصال')) {
+      flowState[from] = null; missCount[from] = 0;
+      return sendText(client, from, '🙋 تم إلغاء الطلب. تتواصل معاك هالات على 966579591669.');
+    }
     if (st.step === 'await_order') {
       st.order = text.trim();
       st.step = 'await_photo';
