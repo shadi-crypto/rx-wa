@@ -184,6 +184,15 @@ function checkAuth(req, res, next) {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
 
+// تشخيص: هل setFlow/getFlow يشتغلون على Supabase؟
+app.get('/debug-flow-test', async (req, res) => {
+  const num = 'debug_test_' + Date.now();
+  await db.setFlow(num, 'await_order', '#9999');
+  const f = await db.getFlow(num);
+  await db.clearFlow(num);
+  res.json({ setOk: !!f, step: f ? f.step : null, order: f ? f.order : null });
+});
+
 // ---------- لوحة الإدارة ----------
 app.get('/admin', checkAuth, async (req, res) => res.send(await adminHtml()));
 
