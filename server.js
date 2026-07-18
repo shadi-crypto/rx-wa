@@ -21,22 +21,19 @@ const API_VERSION = process.env.WA_API_VERSION || 'v19.0';
 console.log(`[DB] Supabase ${db.USING_SUPABASE ? 'مفعّل ✅' : 'غير مهيأ — استخدام محلي ⚠️'}`);
 
 // ---------- إضافة عميل تجريبي (هالات) أول مرة ----------
+const OLD_DEFAULTS = ['كم مدة الشحن','وين أقدر أدفع','كيف أرجع الطلب','ايش المنتجات','تواصل مع موظف'];
 async function seedHalat() {
   const existing = await db.getClientByPhone(process.env.HALAT_PHONE_ID || '1270641526122813');
-  if (existing) return;
+  if (existing) {
+    // نظّف الأسئلة الافتراضية القديمة (المتداخلة) عشان ما تتداخل مع بنك الأسئلة النظيف
+    for (const q of OLD_DEFAULTS) { try { await db.deleteQA('halat', q); } catch (e) {} }
+    return;
+  }
   await db.upsertClient({
     id: 'halat', name: 'هالات',
     phoneId: process.env.HALAT_PHONE_ID || '1270641526122813',
     waToken: process.env.HALAT_WA_TOKEN || 'demo', flow: 'qa'
   });
-  const seed = [
-    ['كم مدة الشحن', 'شحن,توصيل,وصل,قديش,متى', '🚚 الشحن ياخذ 2-5 أيام عمل داخل السعودية.'],
-    ['وين أقدر أدفع', 'دفع,فلوس,سعر,باقة,مدى', '💳 نقبل مدى / تحويل / Apple Pay.'],
-    ['كيف أرجع الطلب', 'إرجاع,استرجاع,غير,تغيير', '↩️ الإرجاع متاح خلال 14 يوم من الاستلام.'],
-    ['ايش المنتجات', 'منتج,طلب,شراء,بضاعة,هالات', '🐾 تلقى كل منتجاتنا هنا: https://halat.sa'],
-    ['تواصل مع موظف', 'موظف,اتصال,إدارة,مساعدة', '🙋 فريق هالات يتواصل معاك قريباً. أو تواصل على 966579591669.']
-  ];
-  for (const [q, k, r] of seed) await db.insertQA({ clientId: 'halat', question: q, keywords: k, reply: r });
 }
 
 // ---------- مطابقة الجواب (كلمات مفتاحية + تشابه دلالي) ----------
