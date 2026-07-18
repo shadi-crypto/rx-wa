@@ -190,6 +190,17 @@ app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/version', (req, res) => res.send('BUILD: await-webhook-before-200 v7'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
 
+// تشخيص: نشغّل handleMessage مباشرة ونتأكد من حفظ flow
+app.get('/debug-handle', async (req, res) => {
+  const from = req.query.from || 'debug_from';
+  const text = req.query.text || 'تالف';
+  const client = await db.getClientByPhone('1270641526122813');
+  if (!client) return res.json({ error: 'no client' });
+  await handleMessage(client, from, text, false);
+  const flow = await db.getFlow(from);
+  res.json({ text, from, flowAfter: flow });
+});
+
 // تشخيص: هل setFlow/getFlow يشتغلون على Supabase؟
 app.get('/debug-flow-test', async (req, res) => {
   const num = 'debug_test_' + Date.now();
