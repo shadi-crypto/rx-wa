@@ -236,7 +236,10 @@ app.get('/admin/api/qa', checkAuth, async (req, res) => {
   const clients = await db.listClients();
   const all = [];
   for (const c of clients) { const q = await db.getQA(c.id); all.push(...q); }
-  res.json({ count: all.length, sample: all.slice(0,2).map(r => ({ keys: (r.keywords||'').split(','), q: r.question })) });
+  // نطبع توزيع client_id
+  const dist = {};
+  for (const r of all) dist[r.client_id] = (dist[r.client_id]||0)+1;
+  res.json({ count: all.length, clientIds: dist, sample: all.slice(0,2).map(r => ({ cid: r.client_id, q: r.question })) });
 });
 
 async function adminHtml() {
