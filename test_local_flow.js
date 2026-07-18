@@ -11,7 +11,7 @@ function last(from) {
   return new Promise(r => {
     const q = http.request({ host: 'localhost', port: 3000, path: '/admin/api/messages', method: 'GET', auth: 'admin:RxWa@2026!Admin' }, res => {
       let d = ''; res.on('data', c => d += c); res.on('end', () => {
-        try { const m = JSON.parse(d).filter(x => x.direction === 'out' && x.text && x.from_num === from); r(m.length ? m[m.length - 1].text : 'NO OUT'); } catch (e) { r('ERR'); }
+        try { const m = JSON.parse(d).filter(x => x.direction === 'out' && x.text); r(m.length ? m[m.length - 1].text : 'NO OUT'); } catch (e) { r('ERR'); }
       });
     });
     q.end();
