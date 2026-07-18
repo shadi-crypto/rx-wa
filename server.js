@@ -218,6 +218,12 @@ app.post('/admin/qa', checkAuth, async (req, res) => {
   res.redirect('/admin');
 });
 
+app.post('/admin/qa/clear', checkAuth, async (req, res) => {
+  const { client_id } = req.body;
+  await db.clearQA(client_id || 'halat');
+  res.redirect('/admin');
+});
+
 app.get('/admin/api/messages', checkAuth, async (req, res) => {
   const rows = await db.listMessages(50);
   res.json(rows);

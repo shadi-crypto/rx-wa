@@ -32,5 +32,6 @@ function logMsg(r) {
   return P();
 }
 function listMessages(l) { return P(db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l)); }
+function clearQA(c) { db.prepare('DELETE FROM qa WHERE client_id = ?').run(c); return P(); }
 
-module.exports = { USING_SUPABASE, ensureSchema, getClientByPhone, upsertClient, listClients, getQA, insertQA, logMsg, listMessages };
+module.exports = { USING_SUPABASE, ensureSchema, getClientByPhone, upsertClient, listClients, getQA, insertQA, logMsg, listMessages, clearQA };
