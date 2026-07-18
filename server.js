@@ -181,6 +181,7 @@ function checkAuth(req, res, next) {
 }
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/version', (req, res) => res.send('COMMIT: ' + (process.env.GIT_COMMIT || 'unknown') + ' | async-webhook-fix'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
 
 // تشخيص: هل setFlow/getFlow يشتغلون على Supabase؟
