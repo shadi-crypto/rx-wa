@@ -1,55 +1,50 @@
-// تخزين محلي فقط (بدون Supabase) — كل الدوال ترجع Promise (آمن مع await)
-const Database = require('better-sqlite3');
+// تخزين محلي في ملف JSON (يشتغل على Render حتى مع readonly filesystem)
 const fs = require('fs');
 const path = require('path');
 const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new Database(path.join(DATA_DIR, 'wasilah.db'));
-db.pragma('journal_mode = WAL');
-db.pragma('encoding = "UTF-8"');
+if (!fs.existsSync(DATA_DIR)) { try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {} }
+const DB_FILE = path.join(DATA_DIR, 'store.json');
 
-db.prepare(`CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT, phone_id TEXT UNIQUE, wa_token TEXT, flow TEXT)`).run();
-db.prepare(`CREATE TABLE IF NOT EXISTS qa (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, question TEXT, keywords TEXT, reply TEXT)`).run();
-db.prepare(`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, from_num TEXT, direction TEXT, text TEXT, at TEXT)`).run();
+function load() {
+  try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
+  catch (e) { return { clients: [], qa: [], messages: [], flows: {}, misses: {} }; }
+}
+function save(d) {
+  try { fs.writeFileSync(DB_FILE, JSON.stringify(d, null, 2)); } catch (e) { console.error('save error:', e.message); }
+}
+let DATA = load();
 
-const USING_SUPABASE = false;
 const P = (v) => Promise.resolve(v);
+const USING_SUPABASE = false;
 
 function ensureSchema() { return P(); }
-function getClientByPhone(p) { return P(db.prepare('SELECT * FROM clients WHERE phone_id = ?').get(p)); }
+function getClientByPhone(p) { return P(DATA.clients.find(c => c.phone_id === p)); }
 function upsertClient({ id, name, phoneId, waToken, flow }) {
-  db.prepare('INSERT INTO clients (id,name,phone_id,wa_token,flow) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=?,phone_id=?,wa_token=?,flow=?').run(id, name, phoneId, waToken, flow, name, phoneId, waToken, flow);
-  return P();
+  const i = DATA.clients.findIndex(c => c.id === id);
+  const rec = { id, name, phone_id: phoneId, wa_token: waToken, flow };
+  if (i >= 0) DATA.clients[i] = rec; else DATA.clients.push(rec);
+  save(DATA); return P();
 }
-function listClients() { return P(db.prepare('SELECT * FROM clients').all()); }
-function getQA(c) { return P(db.prepare('SELECT * FROM qa WHERE client_id = ?').all(c)); }
+function listClients() { return P(DATA.clients); }
+function getQA(c) { return P(DATA.qa.filter(q => q.client_id === c)); }
 function insertQA({ clientId, question, keywords, reply }) {
-  db.prepare('INSERT INTO qa (client_id,question,keywords,reply) VALUES (?,?,?,?)').run(clientId, question, keywords, reply);
-  return P();
+  DATA.qa.push({ client_id: clientId, question, keywords, reply });
+  save(DATA); return P();
 }
 function logMsg(r) {
-  db.prepare('INSERT INTO messages (client_id,from_num,direction,text,at) VALUES (?,?,?,?,?)').run(r.client_id, r.from_num, r.direction, r.text, r.at);
-  return P();
+  DATA.messages.push({ client_id: r.client_id, from_num: r.from_num, direction: r.direction, text: r.text, at: r.at || new Date().toISOString() });
+  if (DATA.messages.length > 200) DATA.messages = DATA.messages.slice(-200);
+  save(DATA); return P();
 }
-function listMessages(l) {
-  try {
-    db.prepare(`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, from_num TEXT, direction TEXT, text TEXT, at TEXT)`).run();
-    return P(db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l));
-  } catch (e) { console.error('listMessages:', e.message); return P([]); }
-}
-function clearQA(c) { db.prepare('DELETE FROM qa WHERE client_id = ?').run(c); return P(); }
-function deleteQA(c, q) { db.prepare('DELETE FROM qa WHERE client_id = ? AND question = ?').run(c, q); return P(); }
+function listMessages(l) { return P(DATA.messages.slice(-l).reverse()); }
+function clearQA(c) { DATA.qa = DATA.qa.filter(q => q.client_id !== c); save(DATA); return P(); }
+function deleteQA(c, q) { DATA.qa = DATA.qa.filter(x => !(x.client_id === c && x.question === q)); save(DATA); return P(); }
 
-// تخزين حالة المحادثة (تدفق التلف + عداد الفشل) — دائم مع السيرفر
-try {
-  db.prepare(`CREATE TABLE IF NOT EXISTS flows (num TEXT PRIMARY KEY, step TEXT, ord TEXT)`).run();
-  db.prepare(`CREATE TABLE IF NOT EXISTS misses (num TEXT PRIMARY KEY, count INTEGER)`).run();
-} catch (e) { console.error('flows/misses table error:', e.message); }
-function getFlow(n) { const r = db.prepare('SELECT * FROM flows WHERE num = ?').get(n); return P(r ? { step: r.step, order: r.ord } : null); }
-function setFlow(n, step, ord) { db.prepare('INSERT INTO flows (num,step,ord) VALUES (?,?,?) ON CONFLICT(num) DO UPDATE SET step=?,ord=?').run(n, step, ord, step, ord); return P(); }
-function clearFlow(n) { db.prepare('DELETE FROM flows WHERE num = ?').run(n); return P(); }
-function getMiss(n) { const r = db.prepare('SELECT * FROM misses WHERE num = ?').get(n); return P(r ? r.count : 0); }
-function setMiss(n, c) { db.prepare('INSERT INTO misses (num,count) VALUES (?,?) ON CONFLICT(num) DO UPDATE SET count=?').run(n, c, c); return P(); }
-function clearMiss(n) { db.prepare('DELETE FROM misses WHERE num = ?').run(n); return P(); }
+function getFlow(n) { return P(DATA.flows[n] ? DATA.flows[n] : null); }
+function setFlow(n, step, ord) { DATA.flows[n] = { step, order: ord }; save(DATA); return P(); }
+function clearFlow(n) { delete DATA.flows[n]; save(DATA); return P(); }
+function getMiss(n) { return P(DATA.misses[n] || 0); }
+function setMiss(n, c) { DATA.misses[n] = c; save(DATA); return P(); }
+function clearMiss(n) { delete DATA.misses[n]; save(DATA); return P(); }
 
 module.exports = { USING_SUPABASE, ensureSchema, getClientByPhone, upsertClient, listClients, getQA, insertQA, logMsg, listMessages, clearQA, deleteQA, getFlow, setFlow, clearFlow, getMiss, setMiss, clearMiss };
