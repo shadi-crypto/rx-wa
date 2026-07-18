@@ -1,9 +1,6 @@
-// تخزين محلي في ملف JSON (يقرأ/يكتب الملف في كل عملية — يصمد مع cold start على Render)
+// تخزين محلي في ملف JSON على /tmp (يسمح بالكتابة على Render، ويصمد خلال الجلسة)
 const fs = require('fs');
-const path = require('path');
-const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) { try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {} }
-const DB_FILE = path.join(DATA_DIR, 'store.json');
+const DB_FILE = '/tmp/store.json';
 
 function load() {
   try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
@@ -12,7 +9,6 @@ function load() {
 function save(d) {
   try { fs.writeFileSync(DB_FILE, JSON.stringify(d, null, 2)); } catch (e) { console.error('save error:', e.message); }
 }
-// كل عملية تقرأ من الملف مباشرة (مو من ذاكرة)
 function D() { return load(); }
 
 const P = (v) => Promise.resolve(v);
