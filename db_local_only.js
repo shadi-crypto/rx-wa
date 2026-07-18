@@ -31,7 +31,12 @@ function logMsg(r) {
   db.prepare('INSERT INTO messages (client_id,from_num,direction,text,at) VALUES (?,?,?,?,?)').run(r.client_id, r.from_num, r.direction, r.text, r.at);
   return P();
 }
-function listMessages(l) { return P(db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l)); }
+function listMessages(l) {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, from_num TEXT, direction TEXT, text TEXT, at TEXT)`).run();
+    return P(db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(l));
+  } catch (e) { console.error('listMessages:', e.message); return P([]); }
+}
 function clearQA(c) { db.prepare('DELETE FROM qa WHERE client_id = ?').run(c); return P(); }
 function deleteQA(c, q) { db.prepare('DELETE FROM qa WHERE client_id = ? AND question = ?').run(c, q); return P(); }
 

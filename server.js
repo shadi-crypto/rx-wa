@@ -217,8 +217,10 @@ app.post('/admin/qa/delete', checkAuth, async (req, res) => {
 });
 
 app.get('/admin/api/messages', checkAuth, async (req, res) => {
-  const rows = await db.listMessages(50);
-  res.json(rows);
+  try {
+    const rows = await db.listMessages(50);
+    res.json(rows);
+  } catch (e) { res.json([]); }
 });
 
 app.get('/admin/api/qa', checkAuth, async (req, res) => {
