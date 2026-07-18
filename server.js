@@ -154,6 +154,24 @@ function checkAuth(req, res, next) {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/version', (req, res) => res.send('BUILD: ensureSchema-creates-halat-client v9'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
+app.get('/debug-qa', checkAuth, async (req, res) => {
+  try {
+    const clients = await db.listClients();
+    const sb = process.env.SUPABASE_URL && process.env.SUPABASE_KEY ? require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY) : null;
+    let qaErr = null, qaData = null;
+    if (sb) {
+      const r = await sb.from('qa').select('*').eq('client_id', 'halat').limit(3);
+      qaErr = r.error ? r.error.message : null;
+      qaData = r.data ? r.data.length : 0;
+      // نحاول insert مباشر
+      const ins = await sb.from('qa').insert({ client_id: 'halat', question: 'DEBUG_Q', keywords: 'x', reply: 'y' });
+      var insErr = ins.error ? ins.error.message : 'OK';
+      if (!ins.error) await sb.from('qa').delete().eq('question', 'DEBUG_Q');
+    }
+    res.json({ clients: clients.length, clientHalat: clients.find(c => c.id === 'halat') ? 'yes' : 'NO', qaErr, qaData, insertTest: insErr });
+  } catch (e) { res.json({ error: e.message }); }
+});
+
 app.get('/debug-flow-test', async (req, res) => {
   const num = 'debug_test_' + Date.now();
   await db.setFlow(num, 'await_order', '#9999');
