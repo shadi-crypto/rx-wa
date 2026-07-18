@@ -45,19 +45,22 @@ async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
   const lower = text.toLowerCase();
-  // المرحلة 1: بحث ضبابي على السؤال نفسه (الأدق)
-  const fuse = new Fuse(rows, { keys: ['question', 'keywords'], threshold: 0.45, ignoreLocation: true, minMatchCharLength: 2 });
-  const hit = fuse.search(text);
-  if (hit.length) return hit[0].item.reply;
-  // المرحلة 2: احتياط — كلمة مفتاحية طويلة جداً (>=4 حروف) تغلب العامة
-  let best = null, bestLen = 0;
+  // المرحلة 1: كلمات مفتاحية — نجمع كل المطابقات مع وزن = طول الكلمة
+  let best = null, bestScore = 0;
   for (const r of rows) {
     const keys = (r.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+    let score = 0;
     for (const k of keys) {
-      if (k.length >= 4 && lower.includes(k) && k.length > bestLen) { bestLen = k.length; best = r; }
+      if (k && lower.includes(k)) score += k.length * k.length; // وزن تربيعي: الكلمة الأدق (أطول) تغلب
     }
+    if (score > bestScore) { bestScore = score; best = r; }
   }
-  return best ? best.reply : null;
+  if (best && bestScore >= 4) return best.reply; // نحتاج نقاط كافية عشان نرد
+  // المرحلة 2: fuse كاحتياط خفيف
+  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true });
+  const hit = fuse.search(text);
+  if (hit.length && hit[0].score < 0.4) return hit[0].item.reply;
+  return null;
 }
 
 // ---------- اختبار بدون رقم (يرد على نص مباشرة) ----------
@@ -93,8 +96,9 @@ app.post('/webhook', (req, res) => {
         for (const m of (value.messages || [])) {
           const from = m.from;
           const text = (m.text && m.text.body || '').trim();
-          db.logMsg(client.id, from, 'in', text);
-          handleMessage(client, from, text);
+          const hasImage = !!(m.image || m.document || m.video);
+          db.logMsg(client.id, from, 'in', text || '[صورة]');
+          handleMessage(client, from, text, hasImage);
         }
       });
     }
@@ -118,9 +122,27 @@ async function sendText(client, to, text) {
 // ---------- محرك الرد ----------
 const missCount = {}; // number -> count of unanswered messages
 const MAX_MISS = 3;
-async function handleMessage(client, from, text) {
+const flowState = {}; // number -> { step, order? }
+async function handleMessage(client, from, text, hasImage) {
   console.log(`[ROUTE] ${client.name} <- ${from}: "${text}"`);
   const lower = text.toLowerCase();
+
+  // ===== تدفق التلف/الكسر =====
+  if (flowState[from] && flowState[from].step) {
+    const st = flowState[from];
+    if (st.step === 'await_order') {
+      st.order = text.trim();
+      st.step = 'await_photo';
+      return sendText(client, from, '📸 ممتاز. الآن أرسل **صورة واضحة للتلف** (التقط صورة للمنتج التالف) ونرفع بلاغ التعويض لك.');
+    }
+    if (st.step === 'await_photo') {
+      if (!hasImage) return sendText(client, from, '📸 نحتاج صورة للتلف عشان نرفع البلاغ. أرسل صورة واضحة للمنتج.');
+      flowState[from] = null;
+      missCount[from] = 0;
+      return sendText(client, from, `✅ استلمنا بلاغك (رقم الطلب: ${st.order} + الصورة). فريق هالات يراجع ويتواصل معاك خلال 24 ساعة. أو تواصل مباشرة 966579591669.`);
+    }
+  }
+
   if (!text || /^(مرحبا|السلام|قائمة|السلام عليكم|start)/.test(lower)) {
     missCount[from] = 0;
     return sendText(client, from,
@@ -129,6 +151,12 @@ async function handleMessage(client, from, text) {
   if (lower.includes('موظف') || lower.includes('اتصال')) {
     missCount[from] = 0;
     return sendText(client, from, '🙋 فريقنا يتواصل معاك قريباً. أو تواصل على 966579591669.');
+  }
+  // يبدأ تدفق التلف؟
+  if (lower.includes('تالف') || lower.includes('كسر') || lower.includes('تلف') || lower.includes('ضرر') || lower.includes('مكسور')) {
+    flowState[from] = { step: 'await_order' };
+    missCount[from] = 0;
+    return sendText(client, from, '⚠️ نأسف للإزعاج! لرفع بلاغ تعويض، أرسل **رقم طلبك** (مثلاً #1234).');
   }
   const reply = await findReply(client, text);
   if (reply) {
