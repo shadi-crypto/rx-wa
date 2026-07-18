@@ -45,25 +45,19 @@ async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
   const lower = text.toLowerCase();
-  // المرحلة 1: مطابقة كلمات مفتاحية — نعطي نقاطاً حسب تخصص الكلمة
-  let best = null, bestScore = 0;
-  for (const r of rows) {
-    const keys = (r.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
-    let score = 0;
-    for (const k of keys) {
-      if (k && lower.includes(k)) {
-        // كلمة أطول = أدق = نقاط أكثر (تغلب الكلمات العامة)
-        score += k.length;
-      }
-    }
-    if (score > bestScore) { bestScore = score; best = r; }
-  }
-  if (best) return best.reply;
-  // المرحلة 2: بحث ضبابي (fuse) كاحتياط
-  const fuse = new Fuse(rows, { keys: ['question', 'keywords'], threshold: 0.4, ignoreLocation: true });
+  // المرحلة 1: بحث ضبابي على السؤال نفسه (الأدق)
+  const fuse = new Fuse(rows, { keys: ['question', 'keywords'], threshold: 0.45, ignoreLocation: true, minMatchCharLength: 2 });
   const hit = fuse.search(text);
   if (hit.length) return hit[0].item.reply;
-  return null;
+  // المرحلة 2: احتياط — كلمة مفتاحية طويلة جداً (>=4 حروف) تغلب العامة
+  let best = null, bestLen = 0;
+  for (const r of rows) {
+    const keys = (r.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+    for (const k of keys) {
+      if (k.length >= 4 && lower.includes(k) && k.length > bestLen) { bestLen = k.length; best = r; }
+    }
+  }
+  return best ? best.reply : null;
 }
 
 // ---------- اختبار بدون رقم (يرد على نص مباشرة) ----------
