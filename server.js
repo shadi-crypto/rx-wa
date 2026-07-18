@@ -73,8 +73,9 @@ app.post('/test-reply', async (req, res) => {
   const clients = await db.listClients();
   const c = clients.find(x => x.id === (client_id || 'halat')) || clients[0];
   if (!c) return res.status(404).send('no client');
+  const rows = await db.getQA(c.id);
   const reply = await findReply(c, text);
-  res.send(reply ? reply : 'NO_MATCH');
+  res.json({ clientId: c.id, rowsCount: rows.length, firstKeys: rows[0] ? rows[0].keywords : null, reply: reply || 'NO_MATCH' });
 });
 
 // ---------- webhook verification ----------
@@ -235,7 +236,7 @@ app.get('/admin/api/qa', checkAuth, async (req, res) => {
   const clients = await db.listClients();
   const all = [];
   for (const c of clients) { const q = await db.getQA(c.id); all.push(...q); }
-  res.json(all.map(r => ({ client: r.client_id, q: r.question, k: r.keywords, r: r.reply.slice(0,30) })));
+  res.json({ count: all.length, sample: all.slice(0,2).map(r => ({ keys: (r.keywords||'').split(','), q: r.question })) });
 });
 
 async function adminHtml() {
