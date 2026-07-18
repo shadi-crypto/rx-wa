@@ -13,13 +13,21 @@ function req(opts, body) {
   });
 }
 (async () => {
-  await req({ host: 'wasilah-wa.onrender.com', path: '/admin/qa/clear', method: 'POST' }, { client_id: 'halat' });
-  console.log('مسح القديم تم');
+  // إيقاظ
+  for (let i = 0; i < 4; i++) { await req({ host: 'wasilah-wa.onrender.com', path: '/health', method: 'GET' }); await wait(2000); }
   let ok = 0, fail = 0;
+  let first = true;
   for (const q of data) {
-    const c = await req({ host: 'wasilah-wa.onrender.com', path: '/admin/qa', method: 'POST' }, q);
+    let c;
+    const maxRetry = first ? 8 : 5;
+    for (let attempt = 0; attempt < maxRetry; attempt++) {
+      c = await req({ host: 'wasilah-wa.onrender.com', path: '/admin/qa', method: 'POST' }, q);
+      if (c.code !== 502) break;
+      await wait(1500);
+    }
+    first = false;
     if (c.code === 302) ok++; else { fail++; console.log('FAIL', c.code, q.question); }
-    await wait(300); // انتظر بين كل طلب عشان ما نطيح بـ 502
+    await wait(500);
   }
   console.log('DONE ok=' + ok + ' fail=' + fail + ' total=' + data.length);
 })();
