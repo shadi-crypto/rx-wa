@@ -229,6 +229,13 @@ app.get('/admin/api/messages', checkAuth, async (req, res) => {
   res.json(rows);
 });
 
+app.get('/admin/api/qa', checkAuth, async (req, res) => {
+  const clients = await db.listClients();
+  const all = [];
+  for (const c of clients) { const q = await db.getQA(c.id); all.push(...q); }
+  res.json(all.map(r => ({ client: r.client_id, q: r.question, k: r.keywords, r: r.reply.slice(0,30) })));
+});
+
 async function adminHtml() {
   const clients = await db.listClients();
   const qaRowsData = [];
