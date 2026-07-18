@@ -84,24 +84,30 @@ app.get('/webhook', (req, res) => {
 
 // ---------- استقبال الرسائل ----------
 app.post('/webhook', async (req, res) => {
-  res.sendStatus(200);
+  // نرد 200 لميتا فوراً (خلال 20 ثانية) لكن نعالج الرسالة أولاً
+  // حتى تكتمل العمليات async (setFlow على Supabase) ولا تقطع
   const body = req.body;
-  if (!body || body.object !== 'whatsapp_business_account') return;
-  for (const entry of (body.entry || [])) {
-    for (const change of (entry.changes || [])) {
-      const value = change.value || {};
-      const phoneId = value.metadata && value.metadata.phone_number_id;
-      const client = await db.getClientByPhone(phoneId);
-        if (!client) return;
-        for (const m of (value.messages || [])) {
-          const from = m.from;
-          const text = (m.text && m.text.body || '').trim();
-          const hasImage = !!(m.image || m.document || m.video);
-          db.logMsg(client.id, from, 'in', text || '[صورة]');
-          await handleMessage(client, from, text, hasImage);
-        }
+  if (!body || body.object !== 'whatsapp_business_account') return res.sendStatus(200);
+  try {
+    for (const entry of (body.entry || [])) {
+      for (const change of (entry.changes || [])) {
+        const value = change.value || {};
+        const phoneId = value.metadata && value.metadata.phone_number_id;
+        const client = await db.getClientByPhone(phoneId);
+          if (!client) continue;
+          for (const m of (value.messages || [])) {
+            const from = m.from;
+            const text = (m.text && m.text.body || '').trim();
+            const hasImage = !!(m.image || m.document || m.video);
+            db.logMsg(client.id, from, 'in', text || '[صورة]');
+            await handleMessage(client, from, text, hasImage);
+          }
+      }
     }
+  } catch (e) {
+    console.error('[WEBHOOK] خطأ:', e.message);
   }
+  res.sendStatus(200);
 });
 
 // ---------- إرسال ----------
@@ -181,7 +187,7 @@ function checkAuth(req, res, next) {
 }
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
-app.get('/version', (req, res) => res.send('BUILD: dotenv-fix-null-ord-nocache v6'));
+app.get('/version', (req, res) => res.send('BUILD: await-webhook-before-200 v7'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
 
 // تشخيص: هل setFlow/getFlow يشتغلون على Supabase؟
