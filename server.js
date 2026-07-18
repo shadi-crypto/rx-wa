@@ -225,6 +225,11 @@ app.get('/admin/api/messages', checkAuth, async (req, res) => {
   } catch (e) { res.json([]); }
 });
 
+// مسح الرسائل (للاختبار)
+app.post('/admin/api/clear-messages', checkAuth, async (req, res) => {
+  try { await db.clearMessages(); res.json({ ok: true }); } catch (e) { res.json({ ok: false }); }
+});
+
 app.get('/admin/api/qa', checkAuth, async (req, res) => {
   const clients = await db.listClients();
   const all = [];

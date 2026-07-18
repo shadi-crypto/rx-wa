@@ -7,6 +7,12 @@ function webhookSim(text, from, hasImage) {
     req.write(body); req.end();
   });
 }
+function clearMessages() {
+  return new Promise(r => {
+    const req = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/clear-messages', method: 'POST', auth: 'admin:RxWa@2026!Admin' }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>r()); });
+    req.end();
+  });
+}
 function getLastOut() {
   return new Promise(r => {
     const req = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/messages', method: 'GET', auth: 'admin:RxWa@2026!Admin' }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ try{ const m=JSON.parse(d).filter(x=>x.direction==='out' && x.text); r(m.length?m[m.length-1].text:'NO OUT'); }catch(e){r('ERR');} }); });
@@ -25,6 +31,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     ['96771000007', 'أبي أعرف أسرار الكون', 'غير مفهوم 3']
   ];
   for (const [from, t, note] of cases) {
+    await clearMessages();
     await webhookSim(t, from);
     await wait(1500);
     const out = await getLastOut();
@@ -32,6 +39,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     console.log((ok?'✅':'❌') + ' ' + note + ' | "' + t + '" => ' + out.slice(0,50));
   }
   console.log('--- تدفق التلف ---');
+  await clearMessages();
   await webhookSim('الشحنة وصلتني تالفة', '96771000099');
   await wait(1200); console.log('1:', (await getLastOut()).slice(0,50));
   await webhookSim('#1234', '96771000099');
