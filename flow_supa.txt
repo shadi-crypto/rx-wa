@@ -1,3 +1,3 @@
-NUM: 966401359299
-Supabase flows after step1: []
-Supabase flows after step2: []
+NUM: 966401512346
+Supabase flows after step1: {"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}
+Supabase flows after step2: {"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}

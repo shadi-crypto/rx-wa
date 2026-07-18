@@ -82,12 +82,12 @@ async function listMessages(limit = 50) {
 // ---------- flows (تدفق متعدد الخطوات) ----------
 async function getFlow(num) {
   const sb = getClient();
-  if (sb) { try { const { data } = await sb.from('flows').select('*').eq('num', num).single(); if (data) return { step: data.step, order: data.ord }; } catch (e) {} }
+  if (sb) { try { const { data } = await sb.from('flows').select('*').eq('num', num).single(); if (data) return { step: data.step, order: data.ord }; } catch (e) { console.error('[FLOW] getFlow error:', e.message); } }
   const f = D().flows[num]; return f ? { step: f.step, order: f.order } : null;
 }
 async function setFlow(num, step, ord) {
   const sb = getClient();
-  if (sb) { try { await sb.from('flows').upsert({ num, step, ord: ord || null }); return; } catch (e) {} }
+  if (sb) { try { const { error } = await sb.from('flows').upsert({ num, step, ord: ord || null }); if (error) console.error('[FLOW] setFlow error:', error.message); return; } catch (e) { console.error('[FLOW] setFlow throw:', e.message); } }
   const d = D(); d.flows[num] = { step, order: ord }; save(d);
 }
 async function clearFlow(num) {
