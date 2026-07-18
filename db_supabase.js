@@ -28,8 +28,17 @@ async function ensureSchema() {
   if (!sb) { console.log('[DB] وضع محلي (بدون Supabase)'); return; }
   try {
     const { error } = await sb.from('clients').select('id').limit(1);
-    if (error) console.log('[SUPABASE] تحذير: شغّل schema.sql. الخطأ:', error.message);
-    else console.log('[SUPABASE] الاتصال ناجح ✅');
+    if (error) { console.log('[SUPABASE] تحذير: شغّل schema.sql. الخطأ:', error.message); return; }
+    console.log('[SUPABASE] الاتصال ناجح ✅');
+    // نشتغّل عميل halat الافتراضي تلقائياً (عشان يشتغل البوت فوراً)
+    const { data: existing } = await sb.from('clients').select('id').eq('id', 'halat').single();
+    if (!existing) {
+      await sb.from('clients').insert({
+        id: 'halat', name: 'هالات', phone_id: '1270641526122813',
+        wa_token: process.env.HALAT_WA_TOKEN || 'demo', flow: 'qa'
+      });
+      console.log('[SUPABASE] تم إنشاء عميل halat تلقائياً ✅');
+    }
   } catch (e) { console.log('[SUPABASE] خطأ اتصال — محلي:', e.message); }
 }
 

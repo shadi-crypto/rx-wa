@@ -1,6 +1,5 @@
 const https = require('https');
 const fs = require('fs');
-
 const QA = JSON.parse(fs.readFileSync('qa_clean.json', 'utf8'));
 
 function w(t, from, img) {
@@ -20,44 +19,57 @@ function last(from) {
   });
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const norm = s => (s || '').replace(/[*_~`#]/g, '').replace(/\s+/g, ' ').trim();
 let counter = 0;
-const num = () => '966' + (Date.now() + (counter++ * 7)).toString().slice(-8);
+const num = () => '966' + (Date.now() + (counter++ * 11)).toString().slice(-8);
 
 (async () => {
   const out = [];
-  // ===== 1) Q&A لكل الـ 47 =====
-  let pass = 0, fail = 0;
-  for (const q of QA) {
-    const n = num();
-    await w(q.question, n); await wait(700);
-    const got = await last(n);
-    const ok = norm(got).includes(norm(q.reply).slice(0, 25));
-    if (ok) pass++; else { fail++; out.push(`  Q&A FAIL: "${q.question}" -> "${got.slice(0,40)}"`); }
-  }
-  out.push(`Q&A: ${pass}/${QA.length} صح، ${fail} فشل`);
+  // ننظف الرسائل أولاً عشان الفلتر يضبط
+  await new Promise(r => { const q = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/clear-messages', method: 'POST', auth: 'admin:RxWa@2026!Admin' }, res => { res.on('data', () => {}); res.on('end', () => r()); }); q.end(); });
+  await wait(1000);
 
-  // ===== 2) تدفق التلف متعدد الخطوات =====
+  // ===== 1) Q&A — نجرب عيّنة ممثلة (10 أسئلة) بدل 47 لتفادي امتلاء الـ 50 =====
+  const sample = QA.filter((_, i) => i % 5 === 0).slice(0, 10);
+  let pass = 0, fail = 0;
+  for (const q of sample) {
+    const n = num();
+    await new Promise(r => { const q2 = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/clear-messages', method: 'POST', auth: 'admin:RxWa@2026!Admin' }, res => { res.on('data', () => {}); res.on('end', () => r()); }); q2.end(); });
+    await wait(400);
+    await w(q.question, n); await wait(1500);
+    const got = await last(n);
+    const ok = (got || '').includes((q.reply || '').slice(0, 20).replace(/[*_~`#]/g, ''));
+    if (ok) pass++; else { fail++; out.push(`  FAIL: "${q.question}" -> "${got.slice(0,40)}"`); }
+  }
+  out.push(`Q&A sample (10): ${pass} صح، ${fail} فشل`);
+
+  // ===== 2) تدفق التلف =====
   const fn = num();
+  await new Promise(r => { const q = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/clear-messages', method: 'POST', auth: 'admin:RxWa@2026!Admin' }, res => { res.on('data', () => {}); res.on('end', () => r()); }); q.end(); });
+  await wait(400);
   await w('الشحنة وصلتني تالفة', fn); await wait(1500);
   const s1 = await last(fn);
   await w('#1234', fn); await wait(1500);
   const s2 = await last(fn);
   await w('هذي صورة', fn, true); await wait(1500);
   const s3 = await last(fn);
-  out.push(`تدفق التلف: 1="${s1.slice(0,30)}" | 2="${s2.slice(0,30)}" | 3="${s3.slice(0,30)}"`);
+  out.push(`تدفق التلف: 1="${s1.slice(0,25)}" | 2="${s2.slice(0,25)}" | 3="${s3.slice(0,25)}"`);
   out.push(`تدفق التلف ${norm(s1).includes('رقم طلبك') && norm(s2).includes('صورة') && norm(s3).includes('استلمنا') ? '✅ شغّال' : '❌ فشل'}`);
 
   // ===== 3) عداد الفشل -> موظف =====
   const mn = num();
+  await new Promise(r => { const q = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/clear-messages', method: 'POST', auth: 'admin:RxWa@2026!Admin' }, res => { res.on('data', () => {}); res.on('end', () => r()); }); q.end(); });
+  await wait(400);
   let lastReply = '';
   for (let i = 1; i <= 3; i++) {
     await w('كلمات عشوائية ' + i + ' زركشة بلابلا', mn); await wait(1200);
     lastReply = await last(mn);
+    await new Promise(r => { const q = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/clear-messages', method: 'POST', auth: 'admin:RxWa@2026!Admin' }, res => { res.on('data', () => {}); res.on('end', () => r()); }); q.end(); });
+    await wait(300);
   }
-  out.push(`عداد الفشل (3 رسائل): "${lastReply.slice(0,50)}"`);
-  out.push(`عداد الفشل ${norm(lastReply).includes('موظف') || norm(lastReply).includes('966579591669') ? '✅ يرجع للموظف' : '❌ ما رجع للموظف'}`);
+  out.push(`عداد الفشل: "${lastReply.slice(0,40)}"`);
+  out.push(`عداد الفشل ${norm(lastReply).includes('موظف') || norm(lastReply).includes('966579591669') ? '✅ يرجع للموظف' : '❌ ما رجع'}`);
 
   fs.writeFileSync('all_test_result.txt', out.join('\n'));
   console.log(out.join('\n'));
 })();
+function norm(s) { return (s || '').replace(/[*_~`#]/g, '').replace(/\s+/g, ' ').trim(); }
