@@ -152,7 +152,7 @@ function checkAuth(req, res, next) {
 }
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
-app.get('/version', (req, res) => res.send('BUILD: ensureSchema-creates-halat-client v9'));
+app.get('/version', (req, res) => res.send('BUILD: ws-fix-supabase-realtime-off-auto-seed v10'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
 app.get('/debug-qa', checkAuth, async (req, res) => {
   try {
