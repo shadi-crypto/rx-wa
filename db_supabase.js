@@ -9,7 +9,7 @@ const sbUrl = process.env.SUPABASE_URL;
 const sbKey = process.env.SUPABASE_KEY;
 
 let sb = null;
-if (sbUrl && sbKey && sbKey.startsWith('sb_') && sbKey.length > 20) {
+if (sbUrl && sbKey && sbKey.length > 40) {
   try {
     sb = createClient(sbUrl, sbKey, { auth: { persistSession: false } });
   } catch (e) {
