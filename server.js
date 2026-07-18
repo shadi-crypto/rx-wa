@@ -224,6 +224,13 @@ app.post('/admin/qa/clear', checkAuth, async (req, res) => {
   res.redirect('/admin');
 });
 
+// حذف سؤال واحد (أخف من clear — ما يطيح السيرفر)
+app.post('/admin/qa/delete', checkAuth, async (req, res) => {
+  const { client_id, question } = req.body;
+  await db.deleteQA(client_id || 'halat', question);
+  res.redirect('/admin');
+});
+
 app.get('/admin/api/messages', checkAuth, async (req, res) => {
   const rows = await db.listMessages(50);
   res.json(rows);
