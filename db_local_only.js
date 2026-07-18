@@ -38,6 +38,7 @@ function logMsg(clientId, fromNum, direction, text) {
 }
 function listMessages(l) { return P(DATA.messages.slice(-l).reverse()); }
 function clearQA(c) { DATA.qa = DATA.qa.filter(q => q.client_id !== c); save(DATA); return P(); }
+function deleteQA(c, q) { DATA.qa = DATA.qa.filter(x => !(x.client_id === c && x.question === q)); save(DATA); return P(); }
 function clearMessages() { DATA.messages = []; save(DATA); return P(); }
 
 function getFlow(n) { return P(DATA.flows[n] ? DATA.flows[n] : null); }
