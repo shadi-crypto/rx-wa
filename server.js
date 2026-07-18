@@ -6,7 +6,7 @@
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
-const db = require('./db_supabase');
+const db = require('./db_local_only');
 require('dotenv').config();
 
 const app = express();
