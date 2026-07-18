@@ -4,12 +4,15 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 
-// نقرأ المفتاح في كل عملية (lazy) عشان نتجنب سقوط السيرفر لو المتغير انحدّث بعد التشغيل
+// نخزّن العميل بعد أول نجاح (cache) عشان كل الطلبات تستخدم نفس المصدر — يمنع تضارب
+// الكتابة على Supabase والقراءة من المحلي (السبب الحقيقي لفشل تدفق التلف)
+let _client = null;
 function getClient() {
+  if (_client) return _client; // ناجح سابقاً — استخدمه دائماً
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_KEY;
   if (!url || !key || key.length < 40) return null;
-  try { return createClient(url, key, { auth: { persistSession: false } }); }
+  try { _client = createClient(url, key, { auth: { persistSession: false } }); return _client; }
   catch (e) { return null; }
 }
 
