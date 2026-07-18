@@ -6,8 +6,8 @@
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
-const db = require('./db_supabase');
 require('dotenv').config();
+const db = require('./db_supabase');
 
 const app = express();
 app.use(express.json({ type: ['application/json', 'text/plain'] }));

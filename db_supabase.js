@@ -4,15 +4,13 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 
-// نخزّن العميل بعد أول نجاح (cache) عشان كل الطلبات تستخدم نفس المصدر — يمنع تضارب
-// الكتابة على Supabase والقراءة من المحلي (السبب الحقيقي لفشل تدفق التلف)
-let _client = null;
+// نقرأ المفتاح في كل عملية (lazy) — ما نخزّنه عشان نتجنب تجمّده على null
+// لو المفتاح انحدّث بعد التشغيل أو تأخر تحميله (dotenv)
 function getClient() {
-  if (_client) return _client; // ناجح سابقاً — استخدمه دائماً
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_KEY;
   if (!url || !key || key.length < 40) return null;
-  try { _client = createClient(url, key, { auth: { persistSession: false } }); return _client; }
+  try { return createClient(url, key, { auth: { persistSession: false } }); }
   catch (e) { return null; }
 }
 
@@ -87,8 +85,9 @@ async function getFlow(num) {
 }
 async function setFlow(num, step, ord) {
   const sb = getClient();
-  if (sb) { try { const { error } = await sb.from('flows').upsert({ num, step, ord: ord || null }); if (error) console.error('[FLOW] setFlow error:', error.message); return; } catch (e) { console.error('[FLOW] setFlow throw:', e.message); } }
-  const d = D(); d.flows[num] = { step, order: ord }; save(d);
+  const ordVal = (ord && ord.length) ? ord : null; // لا نرسل '' أبداً (Supabase يرفضه صامتاً)
+  if (sb) { try { const { error } = await sb.from('flows').upsert({ num, step, ord: ordVal }); if (error) console.error('[FLOW] setFlow error:', error.message); return; } catch (e) { console.error('[FLOW] setFlow throw:', e.message); } }
+  const d = D(); d.flows[num] = { step, order: ordVal }; save(d);
 }
 async function clearFlow(num) {
   const sb = getClient();
