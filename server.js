@@ -230,6 +230,15 @@ app.post('/admin/api/clear-messages', checkAuth, async (req, res) => {
   try { await db.clearMessages(); res.json({ ok: true }); } catch (e) { res.json({ ok: false }); }
 });
 
+// تشخيص: حالة الملف + تدفق التلف
+app.get('/admin/api/debug-flow', checkAuth, async (req, res) => {
+  const flow = await db.getFlow('96771000099');
+  const fs = require('fs');
+  let fileOk = false, fileLen = 0;
+  try { const s = fs.statSync('/tmp/store.json'); fileOk = true; fileLen = s.size; } catch (e) {}
+  res.json({ flow, fileOk, fileLen, dbFile: '/tmp/store.json' });
+});
+
 app.get('/admin/api/qa', checkAuth, async (req, res) => {
   const clients = await db.listClients();
   const all = [];
