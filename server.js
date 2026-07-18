@@ -2,113 +2,46 @@
 // آمنة 100%: WhatsApp Cloud API الرسمي من ميتا (صفر خطر حظر)
 // تخزين: Supabase (دائم + عربي صحيح) مع fallback محلي
 // الواجهة: لوحة إدارة محمية بباسورد + inbox
-
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
 require('dotenv').config();
 const db = require('./db_supabase');
 
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'RxWa@2026!SecureVerify';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'RxWa@2026!Admin';
+const API_VERSION = process.env.WA_API_VERSION || 'v19.0';
+
 const app = express();
 app.use(express.json({ type: ['application/json', 'text/plain'] }));
 app.use(express.urlencoded({ extended: true, type: 'application/x-www-form-urlencoded' }));
 app.use((req, res, next) => { res.set('Content-Type', 'text/html; charset=utf-8'); next(); });
 
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'RxWa@2026!SecureVerify';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'RxWa@2026!Admin';
-const API_VERSION = process.env.WA_API_VERSION || 'v19.0';
+db.ensureSchema();
 
-console.log(`[DB] Supabase ${db.USING_SUPABASE ? 'مفعّل ✅' : 'غير مهيأ — استخدام محلي ⚠️'}`);
-
-// ---------- إضافة عميل تجريبي (هالات) أول مرة ----------
-const OLD_DEFAULTS = ['كم مدة الشحن','وين أقدر أدفع','كيف أرجع الطلب','ايش المنتجات','تواصل مع موظف'];
-async function seedHalat() {
-  const existing = await db.getClientByPhone(process.env.HALAT_PHONE_ID || '1270641526122813');
-  if (existing) {
-    // نظّف الأسئلة الافتراضية القديمة (المتداخلة) عشان ما تتداخل مع بنك الأسئلة النظيف
-    for (const q of OLD_DEFAULTS) { try { await db.deleteQA('halat', q); } catch (e) {} }
-    return;
-  }
-  await db.upsertClient({
-    id: 'halat', name: 'هالات',
-    phoneId: process.env.HALAT_PHONE_ID || '1270641526122813',
-    waToken: process.env.HALAT_WA_TOKEN || 'demo', flow: 'qa'
-  });
-}
-
-// ---------- مطابقة الجواب (كلمات مفتاحية + تشابه دلالي) ----------
+// ---------- مطابقة (keyword + fuse) ----------
 const Fuse = require('fuse.js');
+let _fuse = null, _fuseRows = null;
+async function getFuse(client) {
+  const rows = await db.getQA(client.id);
+  if (_fuse && _fuseRows === rows) return _fuse;
+  _fuse = new Fuse(rows, { keys: ['question', 'keywords'], threshold: 0.5, includeScore: true });
+  _fuseRows = rows;
+  return _fuse;
+}
 async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
-  const lower = text.toLowerCase();
-  // المرحلة 1: fuse على السؤال نفسه (الأدق دلالياً)
-  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true, minMatchCharLength: 2 });
-  const hit = fuse.search(text);
-  if (hit.length && hit[0].score < 0.45) return hit[0].item.reply;
-  // المرحلة 2: كلمة مفتاحية فريدة (سؤال واحد فقط) — الوزن = طول الكلمة
-  const wordToRows = {};
+  const lower = (text || '').toLowerCase();
   for (const r of rows) {
-    const keys = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-    for (const k of keys) { if (!wordToRows[k]) wordToRows[k] = []; wordToRows[k].push(r); }
+    const kws = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+    if (kws.some(k => lower.includes(k))) return r.reply;
   }
-  let best = null, bestLen = 0;
-  for (const k of Object.keys(wordToRows)) {
-    if (k.length >= 3 && lower.includes(k) && wordToRows[k].length === 1 && k.length > bestLen) {
-      bestLen = k.length; best = wordToRows[k][0];
-    }
-  }
-  if (best) return best.reply;
+  const fuse = await getFuse(client);
+  const res = fuse.search(text);
+  if (res.length && res[0].score <= 0.5) return res[0].item.reply;
   return null;
 }
-
-// ---------- اختبار بدون رقم (يرد على نص مباشرة) ----------
-app.post('/test-reply', async (req, res) => {
-  const { client_id, text } = req.body;
-  const clients = await db.listClients();
-  const c = clients.find(x => x.id === (client_id || 'halat')) || clients[0];
-  if (!c) return res.status(404).send('no client');
-  const rows = await db.getQA(c.id);
-  const reply = await findReply(c, text);
-  res.json({ clientId: c.id, rowsCount: rows.length, firstKeys: rows[0] ? rows[0].keywords : null, sampleRow: rows[2] || null, reply: reply || 'NO_MATCH' });
-});
-
-// ---------- webhook verification ----------
-app.get('/webhook', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) return res.status(200).send(challenge);
-  res.sendStatus(403);
-});
-
-// ---------- استقبال الرسائل ----------
-app.post('/webhook', async (req, res) => {
-  // نرد 200 لميتا فوراً (خلال 20 ثانية) لكن نعالج الرسالة أولاً
-  // حتى تكتمل العمليات async (setFlow على Supabase) ولا تقطع
-  const body = req.body;
-  if (!body || body.object !== 'whatsapp_business_account') return res.sendStatus(200);
-  try {
-    for (const entry of (body.entry || [])) {
-      for (const change of (entry.changes || [])) {
-        const value = change.value || {};
-        const phoneId = value.metadata && value.metadata.phone_number_id;
-        const client = await db.getClientByPhone(phoneId);
-          if (!client) continue;
-          for (const m of (value.messages || [])) {
-            const from = m.from;
-            const text = (m.text && m.text.body || '').trim();
-            const hasImage = !!(m.image || m.document || m.video);
-            db.logMsg(client.id, from, 'in', text || '[صورة]');
-            await handleMessage(client, from, text, hasImage);
-          }
-      }
-    }
-  } catch (e) {
-    console.error('[WEBHOOK] خطأ:', e.message);
-  }
-  res.sendStatus(200);
-});
 
 // ---------- إرسال ----------
 async function sendText(client, to, text) {
@@ -129,7 +62,7 @@ async function handleMessage(client, from, text, hasImage) {
   console.log(`[ROUTE] ${client.name} <- ${from}: "${text}"`);
   const lower = text.toLowerCase();
 
-  // ===== تدفق التلف/الكسر (مخزن في Supabase — دائم، يصمد مع cold start) =====
+  // تدفق التلف/الكسر (مخزن في Supabase — دائم)
   const flow = await db.getFlow(from);
   if (flow && flow.step) {
     if (lower.includes('إلغاء') || lower.includes('موظف') || lower.includes('اتصال')) {
@@ -149,8 +82,7 @@ async function handleMessage(client, from, text, hasImage) {
 
   if (!text || /^(مرحبا|السلام|قائمة|السلام عليكم|start)/.test(lower)) {
     await db.clearMiss(from);
-    return sendText(client, from,
-      `👋 أهلاً وسهلاً في *${client.name}*!\\\\n\\\\nاكتب سؤالك وسنرد عليك تلقائياً، أو اكتب "موظف" للتواصل مع أحد الفريق.`);
+    return sendText(client, from, `👋 أهلاً وسهلاً في *${client.name}*!\n\nاكتب سؤالك وسنرد عليك تلقائياً، أو اكتب "موظف" للتواصل مع أحد الفريق.`);
   }
   if (lower.includes('موظف') || lower.includes('اتصال')) {
     await db.clearMiss(from);
@@ -177,6 +109,39 @@ async function handleMessage(client, from, text, hasImage) {
   return sendText(client, from, '🤖 ما قدرت أفهم سؤالك. اكتب كلمات أوضح، أو "موظف" للتواصل المباشر.');
 }
 
+// ---------- استقبال الرسائل ----------
+app.post('/webhook', async (req, res) => {
+  const body = req.body;
+  if (!body || body.object !== 'whatsapp_business_account') return res.sendStatus(200);
+  try {
+    for (const entry of (body.entry || [])) {
+      for (const change of (entry.changes || [])) {
+        const value = change.value || {};
+        const phoneId = value.metadata && value.metadata.phone_number_id;
+        const client = await db.getClientByPhone(phoneId);
+        if (!client) continue;
+        for (const m of (value.messages || [])) {
+          const from = m.from;
+          const text = (m.text && m.text.body || '').trim();
+          const hasImage = !!(m.image || m.document || m.video);
+          db.logMsg(client.id, from, 'in', text || '[صورة]');
+          await handleMessage(client, from, text, hasImage);
+        }
+      }
+    }
+  } catch (e) { console.error('[WEBHOOK] خطأ:', e.message); }
+  res.sendStatus(200);
+});
+
+// ---------- webhook verify ----------
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) res.status(200).send(challenge);
+  else res.sendStatus(403);
+});
+
 // ---------- حماية اللوحة ----------
 function checkAuth(req, res, next) {
   const auth = req.headers['authorization'] || '';
@@ -187,21 +152,8 @@ function checkAuth(req, res, next) {
 }
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
-app.get('/version', (req, res) => res.send('BUILD: await-webhook-before-200 v7'));
+app.get('/version', (req, res) => res.send('BUILD: clean-server-findReply-restored v8'));
 app.get('/debug-db', (req, res) => res.json({ usingSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length >= 40), hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
-
-// تشخيص: نشغّل handleMessage مباشرة ونتأكد من حفظ flow
-app.get('/debug-handle', async (req, res) => {
-  const from = req.query.from || 'debug_from';
-  const text = req.query.text || 'تالف';
-  const client = await db.getClientByPhone('1270641526122813');
-  if (!client) return res.json({ error: 'no client' });
-  await handleMessage(client, from, text, false);
-  const flow = await db.getFlow(from);
-  res.json({ text, from, flowAfter: flow });
-});
-
-// تشخيص: هل setFlow/getFlow يشتغلون على Supabase؟
 app.get('/debug-flow-test', async (req, res) => {
   const num = 'debug_test_' + Date.now();
   await db.setFlow(num, 'await_order', '#9999');
@@ -237,7 +189,6 @@ app.post('/admin/qa/clear', checkAuth, async (req, res) => {
   res.redirect('/admin');
 });
 
-// حذف سؤال واحد (أخف من clear — ما يطيح السيرفر)
 app.post('/admin/qa/delete', checkAuth, async (req, res) => {
   const { client_id, question } = req.body;
   await db.deleteQA(client_id || 'halat', question);
@@ -245,34 +196,18 @@ app.post('/admin/qa/delete', checkAuth, async (req, res) => {
 });
 
 app.get('/admin/api/messages', checkAuth, async (req, res) => {
-  try {
-    const rows = await db.listMessages(50);
-    res.json(rows);
-  } catch (e) { res.json([]); }
+  try { const rows = await db.listMessages(50); res.json(rows); } catch (e) { res.json([]); }
 });
-
-// مسح الرسائل (للاختبار)
 app.post('/admin/api/clear-messages', checkAuth, async (req, res) => {
   try { await db.clearMessages(); res.json({ ok: true }); } catch (e) { res.json({ ok: false }); }
 });
-
-// تشخيص: حالة الملف + تدفق التلف
-app.get('/admin/api/debug-flow', checkAuth, async (req, res) => {
-  const flow = await db.getFlow('96771000099');
-  const fs = require('fs');
-  let fileOk = false, fileLen = 0;
-  try { const s = fs.statSync('/tmp/store.json'); fileOk = true; fileLen = s.size; } catch (e) {}
-  res.json({ flow, fileOk, fileLen, dbFile: '/tmp/store.json' });
-});
-
 app.get('/admin/api/qa', checkAuth, async (req, res) => {
   const clients = await db.listClients();
   const all = [];
   for (const c of clients) { const q = await db.getQA(c.id); all.push(...q); }
-  // نطبع توزيع client_id
   const dist = {};
-  for (const r of all) dist[r.client_id] = (dist[r.client_id]||0)+1;
-  res.json({ count: all.length, clientIds: dist, sample: all.slice(0,2).map(r => ({ cid: r.client_id, q: r.question })) });
+  for (const r of all) dist[r.client_id] = (dist[r.client_id] || 0) + 1;
+  res.json({ count: all.length, clientIds: dist });
 });
 
 async function adminHtml() {
@@ -306,7 +241,7 @@ async function adminHtml() {
       <textarea name="reply" placeholder="الرد"></textarea>
       <button>إضافة سؤال</button>
     </form></div>
-  <div class="card"><h3>قاعدة الأسئلة الحالية</h3>
+  <div class="card"><h3>قاعدة الأسئلة الحالية (${qaRowsData.length})</h3>
     <table><tr><th>عميل</th><th>سؤال</th><th>كلمات</th><th>رد</th></tr>${qaRows}</table></div>
   <div class="card"><h3>أحدث المحادثات</h3><div id="msgs"></div>
     <script>fetch('/admin/api/messages').then(r=>r.json()).then(d=>{
@@ -317,13 +252,5 @@ async function adminHtml() {
   </body></html>`;
 }
 
-// ---------- تشغيل ----------
 const PORT = process.env.PORT || 3000;
-(async () => {
-  await db.ensureSchema().catch(() => {});
-  await seedHalat().catch(e => console.log('seed error:', e.message));
-  app.listen(PORT, async () => {
-    const cs = await db.listClients();
-    console.log(`🚀 RX WA شغّالة على ${PORT} — العملاء:`, cs.map(c => c.id).join(', '));
-  });
-})();
+app.listen(PORT, () => console.log(`🚀 RX WA شغّالة على ${PORT}`));
