@@ -45,11 +45,22 @@ async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
   const lower = text.toLowerCase();
+  // المرحلة 1: مطابقة كلمات مفتاحية — نعطي نقاطاً حسب تخصص الكلمة
+  let best = null, bestScore = 0;
   for (const r of rows) {
     const keys = (r.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
-    if (keys.some(k => lower.includes(k))) return r.reply;
+    let score = 0;
+    for (const k of keys) {
+      if (k && lower.includes(k)) {
+        // كلمة أطول = أدق = نقاط أكثر (تغلب الكلمات العامة)
+        score += k.length;
+      }
+    }
+    if (score > bestScore) { bestScore = score; best = r; }
   }
-  const fuse = new Fuse(rows, { keys: ['question', 'keywords'], threshold: 0.5 });
+  if (best) return best.reply;
+  // المرحلة 2: بحث ضبابي (fuse) كاحتياط
+  const fuse = new Fuse(rows, { keys: ['question', 'keywords'], threshold: 0.4, ignoreLocation: true });
   const hit = fuse.search(text);
   if (hit.length) return hit[0].item.reply;
   return null;
@@ -111,18 +122,31 @@ async function sendText(client, to, text) {
 }
 
 // ---------- محرك الرد ----------
+const missCount = {}; // number -> count of unanswered messages
+const MAX_MISS = 3;
 async function handleMessage(client, from, text) {
   console.log(`[ROUTE] ${client.name} <- ${from}: "${text}"`);
   const lower = text.toLowerCase();
   if (!text || /^(مرحبا|السلام|قائمة|السلام عليكم|start)/.test(lower)) {
+    missCount[from] = 0;
     return sendText(client, from,
-      `👋 أهلاً وسهلاً في *${client.name}*!\n\nاكتب سؤالك وسنرد عليك تلقائياً، أو اكتب "موظف" للتواصل مع أحد الفريق.`);
+      `👋 أهلاً وسهلاً في *${client.name}*!\\n\\nاكتب سؤالك وسنرد عليك تلقائياً، أو اكتب "موظف" للتواصل مع أحد الفريق.`);
   }
   if (lower.includes('موظف') || lower.includes('اتصال')) {
+    missCount[from] = 0;
     return sendText(client, from, '🙋 فريقنا يتواصل معاك قريباً. أو تواصل على 966579591669.');
   }
   const reply = await findReply(client, text);
-  if (reply) return sendText(client, from, reply);
+  if (reply) {
+    missCount[from] = 0;
+    return sendText(client, from, reply);
+  }
+  // لم نجد إجابة — نزيد العداد
+  missCount[from] = (missCount[from] || 0) + 1;
+  if (missCount[from] >= MAX_MISS) {
+    missCount[from] = 0;
+    return sendText(client, from, '🙋 يبدو أن سؤالك خارج نطاق المعرفة الحالية. تواصل مباشرة مع موظف هالات على 966579591669 أو info@Halat.sa وسيساعدونك فوراً.');
+  }
   return sendText(client, from, '🤖 ما قدرت أفهم سؤالك. اكتب كلمات أوضح، أو "موظف" للتواصل المباشر.');
 }
 
