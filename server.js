@@ -45,18 +45,36 @@ async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
   const lower = text.toLowerCase();
-  // المرحلة 1: كلمات مفتاحية — نجمع كل المطابقات مع وزن = طول الكلمة
-  let best = null, bestScore = 0;
+  // نبني خريطة: كل كلمة مفتاحية -> قائمة الأسئلة اللي تحتويها
+  const wordToRows = {};
   for (const r of rows) {
-    const keys = (r.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
-    let score = 0;
+    const keys = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
     for (const k of keys) {
-      if (k && lower.includes(k)) score += k.length * k.length; // وزن تربيعي: الكلمة الأدق (أطول) تغلب
+      if (!wordToRows[k]) wordToRows[k] = [];
+      wordToRows[k].push(r);
     }
-    if (score > bestScore) { bestScore = score; best = r; }
   }
-  if (best && bestScore >= 4) return best.reply; // نحتاج نقاط كافية عشان نرد
-  // المرحلة 2: fuse كاحتياط خفيف
+  // نبحث الكلمة الأطول المشتركة بين النص والسؤال، بشرط تكون فريدة (سؤال واحد فقط)
+  let best = null;
+  const matchedWords = new Set();
+  for (const k of Object.keys(wordToRows)) {
+    if (k.length >= 3 && lower.includes(k)) {
+      if (wordToRows[k].length === 1) { // كلمة فريدة لسؤال واحد
+        if (!best || k.length > best.klen) best = { r: wordToRows[k][0], klen: k.length };
+      }
+    }
+  }
+  if (best) return best.r.reply;
+  // احتياط: أول سؤال فيه أي كلمة مطابقة (يفضل الطويلة)
+  let fb = null, fblen = 0;
+  for (const r of rows) {
+    const keys = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+    for (const k of keys) {
+      if (k.length >= 3 && lower.includes(k) && k.length > fblen) { fblen = k.length; fb = r; }
+    }
+  }
+  if (fb) return fb.reply;
+  // fuse كاحتياط أخير
   const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true });
   const hit = fuse.search(text);
   if (hit.length && hit[0].score < 0.4) return hit[0].item.reply;
