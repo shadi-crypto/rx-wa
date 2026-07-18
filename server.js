@@ -65,16 +65,7 @@ async function findReply(client, text) {
     }
   }
   if (best) return best.r.reply;
-  // احتياط: أول سؤال فيه أي كلمة مطابقة (يفضل الطويلة)
-  let fb = null, fblen = 0;
-  for (const r of rows) {
-    const keys = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-    for (const k of keys) {
-      if (k.length >= 3 && lower.includes(k) && k.length > fblen) { fblen = k.length; fb = r; }
-    }
-  }
-  if (fb) return fb.reply;
-  // fuse كاحتياط أخير
+  // fuse كاحتياط أخير (على السؤال فقط)
   const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true });
   const hit = fuse.search(text);
   if (hit.length && hit[0].score < 0.4) return hit[0].item.reply;
