@@ -70,7 +70,7 @@ app.post('/test-reply', async (req, res) => {
   if (!c) return res.status(404).send('no client');
   const rows = await db.getQA(c.id);
   const reply = await findReply(c, text);
-  res.json({ clientId: c.id, rowsCount: rows.length, firstKeys: rows[0] ? rows[0].keywords : null, reply: reply || 'NO_MATCH' });
+  res.json({ clientId: c.id, rowsCount: rows.length, firstKeys: rows[0] ? rows[0].keywords : null, sampleRow: rows[2] || null, reply: reply || 'NO_MATCH' });
 });
 
 // ---------- webhook verification ----------
