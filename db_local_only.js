@@ -36,8 +36,10 @@ function clearQA(c) { db.prepare('DELETE FROM qa WHERE client_id = ?').run(c); r
 function deleteQA(c, q) { db.prepare('DELETE FROM qa WHERE client_id = ? AND question = ?').run(c, q); return P(); }
 
 // تخزين حالة المحادثة (تدفق التلف + عداد الفشل) — دائم مع السيرفر
-db.prepare(`CREATE TABLE IF NOT EXISTS flows (num TEXT PRIMARY KEY, step TEXT, ord TEXT)`).run();
-db.prepare(`CREATE TABLE IF NOT EXISTS misses (num TEXT PRIMARY KEY, count INTEGER)`).run();
+try {
+  db.prepare(`CREATE TABLE IF NOT EXISTS flows (num TEXT PRIMARY KEY, step TEXT, ord TEXT)`).run();
+  db.prepare(`CREATE TABLE IF NOT EXISTS misses (num TEXT PRIMARY KEY, count INTEGER)`).run();
+} catch (e) { console.error('flows/misses table error:', e.message); }
 function getFlow(n) { const r = db.prepare('SELECT * FROM flows WHERE num = ?').get(n); return P(r ? { step: r.step, order: r.ord } : null); }
 function setFlow(n, step, ord) { db.prepare('INSERT INTO flows (num,step,ord) VALUES (?,?,?) ON CONFLICT(num) DO UPDATE SET step=?,ord=?').run(n, step, ord, step, ord); return P(); }
 function clearFlow(n) { db.prepare('DELETE FROM flows WHERE num = ?').run(n); return P(); }
