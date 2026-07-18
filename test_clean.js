@@ -9,7 +9,7 @@ function webhookSim(text, from, hasImage) {
 }
 function getLastOut() {
   return new Promise(r => {
-    const req = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/messages', method: 'GET', auth: 'admin:RxWa@2026!Admin' }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ try{ const m=JSON.parse(d).filter(x=>x.direction==='out'); r(m.length?m[m.length-1].text:'NO OUT'); }catch(e){r('ERR');} }); });
+    const req = https.request({ host: 'wasilah-wa.onrender.com', path: '/admin/api/messages', method: 'GET', auth: 'admin:RxWa@2026!Admin' }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ try{ const m=JSON.parse(d).filter(x=>x.direction==='out' && x.text); r(m.length?m[m.length-1].text:'NO OUT'); }catch(e){r('ERR');} }); });
     req.end();
   });
 }
@@ -29,13 +29,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await wait(1500);
     const out = await getLastOut();
     const ok = (note === 'غير مفهوم' && out.includes('ما قدرت')) || (note === 'غير مفهوم 3' && out.includes('موظف')) || (!note.includes('غير مفهوم') && !out.includes('ما قدرت') && !out.includes('NO OUT') && !out.includes('ERR'));
-    console.log((ok?'✅':'❌') + ' ' + note + ' | "' + t + '" => ' + out.slice(0,55));
+    console.log((ok?'✅':'❌') + ' ' + note + ' | "' + t + '" => ' + out.slice(0,50));
   }
   console.log('--- تدفق التلف ---');
   await webhookSim('الشحنة وصلتني تالفة', '96771000099');
-  await wait(1200); console.log('1:', (await getLastOut()).slice(0,55));
+  await wait(1200); console.log('1:', (await getLastOut()).slice(0,50));
   await webhookSim('#1234', '96771000099');
-  await wait(1200); console.log('2:', (await getLastOut()).slice(0,55));
+  await wait(1200); console.log('2:', (await getLastOut()).slice(0,50));
   await webhookSim('هذي صورة المنتج', '96771000099', true);
-  await wait(1200); console.log('3:', (await getLastOut()).slice(0,55));
+  await wait(1200); console.log('3:', (await getLastOut()).slice(0,50));
 })();

@@ -42,21 +42,23 @@ async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
   const lower = text.toLowerCase();
-  // مطابقة بالنقاط: كل سؤال ياخذ نقاط = مجموع أطوال الكلمات المفتاحية اللي تنطبق
-  let best = null, bestScore = 0;
+  // المرحلة 1: fuse على السؤال نفسه (الأدق دلالياً)
+  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.35, ignoreLocation: true, minMatchCharLength: 3 });
+  const hit = fuse.search(text);
+  if (hit.length && hit[0].score < 0.3) return hit[0].item.reply;
+  // المرحلة 2: كلمة مفتاحية فريدة (سؤال واحد فقط) — الوزن = طول الكلمة
+  const wordToRows = {};
   for (const r of rows) {
     const keys = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-    let score = 0;
-    for (const k of keys) {
-      if (k.length >= 2 && lower.includes(k)) score += k.length * k.length;
-    }
-    if (score > bestScore) { bestScore = score; best = r; }
+    for (const k of keys) { if (!wordToRows[k]) wordToRows[k] = []; wordToRows[k].push(r); }
   }
-  if (best && bestScore >= 9) return best.reply; // نحتاج نقاط كافية (كلمة بطول 3+ على الأقل)
-  // احتياط: fuse على السؤال
-  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.4, ignoreLocation: true, minMatchCharLength: 3 });
-  const hit = fuse.search(text);
-  if (hit.length && hit[0].score < 0.35) return hit[0].item.reply;
+  let best = null, bestLen = 0;
+  for (const k of Object.keys(wordToRows)) {
+    if (k.length >= 3 && lower.includes(k) && wordToRows[k].length === 1 && k.length > bestLen) {
+      bestLen = k.length; best = wordToRows[k][0];
+    }
+  }
+  if (best) return best.reply;
   return null;
 }
 
