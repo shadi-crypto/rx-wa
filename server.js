@@ -124,23 +124,17 @@ async function handleMessage(client, from, text, hasImage) {
   console.log(`[ROUTE] ${client.name} <- ${from}: "${text}"`);
   const lower = text.toLowerCase();
 
-  // ===== تدفق التلف/الكسر (مخزن في قاعدة البيانات عشان يصمد مع cold start) =====
-  const flow = await db.getFlow(from);
-  if (flow && flow.step) {
-    // خروج من التدفق
-    if (lower.includes('إلغاء') || lower.includes('موظف') || lower.includes('اتصال')) {
-      await db.clearFlow(from); await db.clearMiss(from);
-      return sendText(client, from, '🙋 تم إلغاء الطلب. تتواصل معاك هالات على 966579591669.');
+  // ===== تدفق التلف/الكسر (بدون حالة — يشتغل على Render المجاني مباشرة) =====
+  const isDamage = lower.includes('تالف') || lower.includes('كسر') || lower.includes('تلف') || lower.includes('ضرر') || lower.includes('مكسور') || lower.includes('خرب');
+  if (isDamage) {
+    await db.clearMiss(from);
+    if (hasImage) {
+      if (/\d{3,}/.test(text) || lower.includes('رقم')) {
+        return sendText(client, from, '✅ استلمنا بلاغك (الصورة + رقم الطلب). فريق هالات يراجع ويتواصل معاك خلال 24 ساعة. أو تواصل مباشرة 966579591669.');
+      }
+      return sendText(client, from, '📸 استلمنا صورة التلف. الآن أرسل **رقم طلبك** (مثال #1234) عشان نكمل رفع البلاغ.');
     }
-    if (flow.step === 'await_order') {
-      await db.setFlow(from, 'await_photo', text.trim());
-      return sendText(client, from, '📸 ممتاز. الآن أرسل **صورة واضحة للتلف** (التقط صورة للمنتج التالف) ونرفع بلاغ التعويض لك.');
-    }
-    if (flow.step === 'await_photo') {
-      if (!hasImage) return sendText(client, from, '📸 نحتاج صورة للتلف عشان نرفع البلاغ. أرسل صورة واضحة للمنتج.');
-      await db.clearFlow(from); await db.clearMiss(from);
-      return sendText(client, from, `✅ استلمنا بلاغك (رقم الطلب: ${flow.order} + الصورة). فريق هالات يراجع ويتواصل معاك خلال 24 ساعة. أو تواصل مباشرة 966579591669.`);
-    }
+    return sendText(client, from, '⚠️ نأسف للإزعاج! لرفع بلاغ تعويض: أرسل **رقم طلبك** (مثال #1234) **مع صورة واضحة للمنتج التالف** في نفس الرسالة. فريق هالات يراجع ويتواصل خلال 24 ساعة، أو تواصل مباشرة 966579591669.');
   }
 
   if (!text || /^(مرحبا|السلام|قائمة|السلام عليكم|start)/.test(lower)) {
