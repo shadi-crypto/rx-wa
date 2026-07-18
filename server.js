@@ -43,9 +43,9 @@ async function findReply(client, text) {
   if (!rows.length) return null;
   const lower = text.toLowerCase();
   // المرحلة 1: fuse على السؤال نفسه (الأدق دلالياً)
-  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.35, ignoreLocation: true, minMatchCharLength: 3 });
+  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true, minMatchCharLength: 2 });
   const hit = fuse.search(text);
-  if (hit.length && hit[0].score < 0.3) return hit[0].item.reply;
+  if (hit.length && hit[0].score < 0.45) return hit[0].item.reply;
   // المرحلة 2: كلمة مفتاحية فريدة (سؤال واحد فقط) — الوزن = طول الكلمة
   const wordToRows = {};
   for (const r of rows) {
