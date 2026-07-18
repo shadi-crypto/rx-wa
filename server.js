@@ -55,6 +55,16 @@ async function findReply(client, text) {
   return null;
 }
 
+// ---------- اختبار بدون رقم (يرد على نص مباشرة) ----------
+app.post('/test-reply', checkAuth, async (req, res) => {
+  const { client_id, text } = req.body;
+  const client = await db.getClientByPhone ? null : null;
+  const c = (await db.listClients()).find(x => x.id === (client_id || 'halat')) || (await db.listClients())[0];
+  if (!c) return res.status(404).send('no client');
+  const reply = await findReply(c, text);
+  res.send(reply ? reply : 'NO_MATCH');
+});
+
 // ---------- webhook verification ----------
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
