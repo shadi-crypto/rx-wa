@@ -35,4 +35,14 @@ function listMessages(l) { return P(db.prepare('SELECT * FROM messages ORDER BY 
 function clearQA(c) { db.prepare('DELETE FROM qa WHERE client_id = ?').run(c); return P(); }
 function deleteQA(c, q) { db.prepare('DELETE FROM qa WHERE client_id = ? AND question = ?').run(c, q); return P(); }
 
-module.exports = { USING_SUPABASE, ensureSchema, getClientByPhone, upsertClient, listClients, getQA, insertQA, logMsg, listMessages, clearQA, deleteQA };
+// تخزين حالة المحادثة (تدفق التلف + عداد الفشل) — دائم مع السيرفر
+db.prepare(`CREATE TABLE IF NOT EXISTS flows (num TEXT PRIMARY KEY, step TEXT, ord TEXT)`).run();
+db.prepare(`CREATE TABLE IF NOT EXISTS misses (num TEXT PRIMARY KEY, count INTEGER)`).run();
+function getFlow(n) { const r = db.prepare('SELECT * FROM flows WHERE num = ?').get(n); return P(r ? { step: r.step, order: r.ord } : null); }
+function setFlow(n, step, ord) { db.prepare('INSERT INTO flows (num,step,ord) VALUES (?,?,?) ON CONFLICT(num) DO UPDATE SET step=?,ord=?').run(n, step, ord, step, ord); return P(); }
+function clearFlow(n) { db.prepare('DELETE FROM flows WHERE num = ?').run(n); return P(); }
+function getMiss(n) { const r = db.prepare('SELECT * FROM misses WHERE num = ?').get(n); return P(r ? r.count : 0); }
+function setMiss(n, c) { db.prepare('INSERT INTO misses (num,count) VALUES (?,?) ON CONFLICT(num) DO UPDATE SET count=?').run(n, c, c); return P(); }
+function clearMiss(n) { db.prepare('DELETE FROM misses WHERE num = ?').run(n); return P(); }
+
+module.exports = { USING_SUPABASE, ensureSchema, getClientByPhone, upsertClient, listClients, getQA, insertQA, logMsg, listMessages, clearQA, deleteQA, getFlow, setFlow, clearFlow, getMiss, setMiss, clearMiss };

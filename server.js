@@ -118,58 +118,54 @@ async function sendText(client, to, text) {
 }
 
 // ---------- محرك الرد ----------
-const missCount = {}; // number -> count of unanswered messages
-const MAX_MISS = 3;
-const flowState = {}; // number -> { step, order? }
 async function handleMessage(client, from, text, hasImage) {
   console.log(`[ROUTE] ${client.name} <- ${from}: "${text}"`);
   const lower = text.toLowerCase();
 
-  // ===== تدفق التلف/الكسر =====
-  if (flowState[from] && flowState[from].step) {
-    const st = flowState[from];
+  // ===== تدفق التلف/الكسر (مخزن في قاعدة البيانات عشان يصمد مع cold start) =====
+  const flow = await db.getFlow(from);
+  if (flow && flow.step) {
     // خروج من التدفق
     if (lower.includes('إلغاء') || lower.includes('موظف') || lower.includes('اتصال')) {
-      flowState[from] = null; missCount[from] = 0;
+      await db.clearFlow(from); await db.clearMiss(from);
       return sendText(client, from, '🙋 تم إلغاء الطلب. تتواصل معاك هالات على 966579591669.');
     }
-    if (st.step === 'await_order') {
-      st.order = text.trim();
-      st.step = 'await_photo';
+    if (flow.step === 'await_order') {
+      await db.setFlow(from, 'await_photo', text.trim());
       return sendText(client, from, '📸 ممتاز. الآن أرسل **صورة واضحة للتلف** (التقط صورة للمنتج التالف) ونرفع بلاغ التعويض لك.');
     }
-    if (st.step === 'await_photo') {
+    if (flow.step === 'await_photo') {
       if (!hasImage) return sendText(client, from, '📸 نحتاج صورة للتلف عشان نرفع البلاغ. أرسل صورة واضحة للمنتج.');
-      flowState[from] = null;
-      missCount[from] = 0;
-      return sendText(client, from, `✅ استلمنا بلاغك (رقم الطلب: ${st.order} + الصورة). فريق هالات يراجع ويتواصل معاك خلال 24 ساعة. أو تواصل مباشرة 966579591669.`);
+      await db.clearFlow(from); await db.clearMiss(from);
+      return sendText(client, from, `✅ استلمنا بلاغك (رقم الطلب: ${flow.order} + الصورة). فريق هالات يراجع ويتواصل معاك خلال 24 ساعة. أو تواصل مباشرة 966579591669.`);
     }
   }
 
   if (!text || /^(مرحبا|السلام|قائمة|السلام عليكم|start)/.test(lower)) {
-    missCount[from] = 0;
+    await db.clearMiss(from);
     return sendText(client, from,
-      `👋 أهلاً وسهلاً في *${client.name}*!\\n\\nاكتب سؤالك وسنرد عليك تلقائياً، أو اكتب "موظف" للتواصل مع أحد الفريق.`);
+      `👋 أهلاً وسهلاً في *${client.name}*!\\\\n\\\\nاكتب سؤالك وسنرد عليك تلقائياً، أو اكتب "موظف" للتواصل مع أحد الفريق.`);
   }
   if (lower.includes('موظف') || lower.includes('اتصال')) {
-    missCount[from] = 0;
+    await db.clearMiss(from);
     return sendText(client, from, '🙋 فريقنا يتواصل معاك قريباً. أو تواصل على 966579591669.');
   }
   // يبدأ تدفق التلف؟
   if (lower.includes('تالف') || lower.includes('كسر') || lower.includes('تلف') || lower.includes('ضرر') || lower.includes('مكسور')) {
-    flowState[from] = { step: 'await_order' };
-    missCount[from] = 0;
+    await db.setFlow(from, 'await_order', '');
+    await db.clearMiss(from);
     return sendText(client, from, '⚠️ نأسف للإزعاج! لرفع بلاغ تعويض، أرسل **رقم طلبك** (مثلاً #1234).');
   }
   const reply = await findReply(client, text);
   if (reply) {
-    missCount[from] = 0;
+    await db.clearMiss(from);
     return sendText(client, from, reply);
   }
   // لم نجد إجابة — نزيد العداد
-  missCount[from] = (missCount[from] || 0) + 1;
-  if (missCount[from] >= MAX_MISS) {
-    missCount[from] = 0;
+  const miss = (await db.getMiss(from) || 0) + 1;
+  await db.setMiss(from, miss);
+  if (miss >= 3) {
+    await db.clearMiss(from);
     return sendText(client, from, '🙋 يبدو أن سؤالك خارج نطاق المعرفة الحالية. تواصل مباشرة مع موظف هالات على 966579591669 أو info@Halat.sa وسيساعدونك فوراً.');
   }
   return sendText(client, from, '🤖 ما قدرت أفهم سؤالك. اكتب كلمات أوضح، أو "موظف" للتواصل المباشر.');
