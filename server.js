@@ -148,9 +148,13 @@ app.post('/admin/client', checkAuth, async (req, res) => {
 });
 
 app.post('/admin/qa', checkAuth, async (req, res) => {
-  const { client_id, question, keywords, reply } = req.body;
-  if (!client_id || !question || !reply) return res.status(400).send('missing fields');
-  await db.insertQA({ clientId: client_id, question, keywords, reply });
+  let rows = req.body;
+  if (!Array.isArray(rows)) rows = [rows];
+  for (const r of rows) {
+    const { client_id, question, keywords, reply } = r;
+    if (!client_id || !question || !reply) continue;
+    await db.insertQA({ clientId: client_id, question, keywords, reply });
+  }
   res.redirect('/admin');
 });
 
