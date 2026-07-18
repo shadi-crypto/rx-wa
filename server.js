@@ -51,17 +51,15 @@ async function findReply(client, text) {
       wordToRows[k].push(r);
     }
   }
-  // نبحث الكلمة الأطول المشتركة بين النص والسؤال، بشرط تكون فريدة (سؤال واحد فقط)
-  let best = null;
-  const matchedWords = new Set();
+  // نبحث الكلمة الأطول المشتركة بين النص والسؤال (نأخذ الأطول حتى لو مشتركة)
+  let best = null, bestLen = 0;
   for (const k of Object.keys(wordToRows)) {
-    if (k.length >= 3 && lower.includes(k)) {
-      if (wordToRows[k].length === 1) { // كلمة فريدة لسؤال واحد
-        if (!best || k.length > best.klen) best = { r: wordToRows[k][0], klen: k.length };
-      }
+    if (k.length >= 3 && lower.includes(k) && k.length > bestLen) {
+      bestLen = k.length;
+      best = wordToRows[k][0]; // ناخذ أول سؤال فيه هالكلمة
     }
   }
-  if (best) return best.r.reply;
+  if (best) return best.reply;
   // fuse كاحتياط أخير (على السؤال فقط)
   const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true });
   const hit = fuse.search(text);
