@@ -83,7 +83,7 @@ app.get('/webhook', (req, res) => {
 });
 
 // ---------- استقبال الرسائل ----------
-app.post('/webhook', (req, res) => {
+app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
   const body = req.body;
   if (!body || body.object !== 'whatsapp_business_account') return;
@@ -91,16 +91,15 @@ app.post('/webhook', (req, res) => {
     for (const change of (entry.changes || [])) {
       const value = change.value || {};
       const phoneId = value.metadata && value.metadata.phone_number_id;
-      db.getClientByPhone(phoneId).then(client => {
+      const client = await db.getClientByPhone(phoneId);
         if (!client) return;
         for (const m of (value.messages || [])) {
           const from = m.from;
           const text = (m.text && m.text.body || '').trim();
           const hasImage = !!(m.image || m.document || m.video);
           db.logMsg(client.id, from, 'in', text || '[صورة]');
-          handleMessage(client, from, text, hasImage);
+          await handleMessage(client, from, text, hasImage);
         }
-      });
     }
   }
 });
