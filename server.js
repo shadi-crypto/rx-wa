@@ -42,28 +42,23 @@ async function findReply(client, text) {
   const rows = await db.getQA(client.id);
   if (!rows.length) return null;
   const lower = text.toLowerCase();
-  // نبني خريطة: كل كلمة مفتاحية -> قائمة الأسئلة اللي تحتويها
+  // المرحلة 1: fuse على السؤال نفسه (الأدق دلالياً)
+  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.4, ignoreLocation: true, minMatchCharLength: 3 });
+  const hit = fuse.search(text);
+  if (hit.length && hit[0].score < 0.35) return hit[0].item.reply;
+  // المرحلة 2: كلمة مفتاحية فريدة (سؤال واحد فقط)
   const wordToRows = {};
   for (const r of rows) {
     const keys = (r.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-    for (const k of keys) {
-      if (!wordToRows[k]) wordToRows[k] = [];
-      wordToRows[k].push(r);
-    }
+    for (const k of keys) { if (!wordToRows[k]) wordToRows[k] = []; wordToRows[k].push(r); }
   }
-  // نبحث الكلمة الأطول المشتركة بين النص والسؤال (نأخذ الأطول حتى لو مشتركة)
   let best = null, bestLen = 0;
   for (const k of Object.keys(wordToRows)) {
-    if (k.length >= 3 && lower.includes(k) && k.length > bestLen) {
-      bestLen = k.length;
-      best = wordToRows[k][0]; // ناخذ أول سؤال فيه هالكلمة
+    if (k.length >= 3 && lower.includes(k) && wordToRows[k].length === 1 && k.length > bestLen) {
+      bestLen = k.length; best = wordToRows[k][0];
     }
   }
   if (best) return best.reply;
-  // fuse كاحتياط أخير (على السؤال فقط)
-  const fuse = new Fuse(rows, { keys: ['question'], threshold: 0.5, ignoreLocation: true });
-  const hit = fuse.search(text);
-  if (hit.length && hit[0].score < 0.4) return hit[0].item.reply;
   return null;
 }
 
