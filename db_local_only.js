@@ -31,8 +31,8 @@ function insertQA({ clientId, question, keywords, reply }) {
   DATA.qa.push({ client_id: clientId, question, keywords, reply });
   save(DATA); return P();
 }
-function logMsg(r) {
-  DATA.messages.push({ client_id: r.client_id, from_num: r.from_num, direction: r.direction, text: r.text, at: r.at || new Date().toISOString() });
+function logMsg(clientId, fromNum, direction, text) {
+  DATA.messages.push({ client_id: clientId, from_num: fromNum, direction, text: text || '', at: new Date().toISOString() });
   if (DATA.messages.length > 200) DATA.messages = DATA.messages.slice(-200);
   save(DATA); return P();
 }
