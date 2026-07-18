@@ -182,6 +182,7 @@ function checkAuth(req, res, next) {
 }
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/debug-db', (req, res) => res.json({ usingSupabase: db.USING_SUPABASE, hasUrl: !!process.env.SUPABASE_URL, hasKey: !!process.env.SUPABASE_KEY }));
 
 // ---------- لوحة الإدارة ----------
 app.get('/admin', checkAuth, async (req, res) => res.send(await adminHtml()));
